@@ -73,7 +73,7 @@ object AkkaQuickstart extends App {
   //#actor-system
 
   //#main-send-messages
-  greeterMain ! SayHello("Charles")
+  greeterMain ! SayHello("Pepito")
   //#main-send-messages
 }
 //#main-class
