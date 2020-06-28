@@ -3,8 +3,9 @@ package iasc.g4
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.{ExceptionHandler, Route}
 import akka.actor.typed.scaladsl.AskPattern._
+import akka.event.Logging
 import akka.util.Timeout
 import iasc.g4.Models.Command
 import iasc.g4.actors.AuctionSpawnerActor.GetAuctions
@@ -57,7 +58,7 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Command
   }
 
   object AuctionRoutes {
-    def getAuctions(): Future[Auctions] = {
+    def getAuctions: Future[Auctions] = {
       auctionSpawner.ask(GetAuctions)
     }
     def getAuction(id: String): Option[Auction] = {
@@ -77,7 +78,7 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Command
       concat(
         pathEnd(
           get {
-            complete(getAuctions())
+            complete(getAuctions)
           }
         ),
         path(Segment) { auctionId =>
@@ -99,7 +100,24 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Command
     }
   }
 
+
+
+  /**
+   * @return rutas completas con manejo de excepciones general
+   */
   def routes(): Route = {
-    concat(AuctionRoutes.routes, BuyersRoutes.routes)
+
+    val customHandler: ExceptionHandler = ExceptionHandler {
+      case ex: Exception =>
+        system.log.error("Unhandled error :(:", ex)
+        complete(StatusCodes.InternalServerError, s"General error: ${ex.getMessage}")
+    }
+
+    handleExceptions(customHandler) {
+      logRequestResult(("HTTP Request Result", Logging.InfoLevel)) {
+        concat(AuctionRoutes.routes, BuyersRoutes.routes)
+      }
+    }
   }
+
 }

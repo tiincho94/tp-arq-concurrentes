@@ -1,6 +1,6 @@
 package iasc.g4
 
-import akka.actor.typed.{ActorSystem, Behavior, Terminated}
+import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
@@ -21,7 +21,7 @@ object Application extends App {
 
     val port = system.settings.config.getInt("my-app.server.port")
     val futureBinding = Http().bindAndHandle(routes, "localhost", port)
-    println(s"Server online at http://localhost:${port}/\nPress RETURN to stop...")
+    println(s"Server online at http://localhost:$port/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
     futureBinding
       .flatMap(_.unbind()) // trigger unbinding from the port
