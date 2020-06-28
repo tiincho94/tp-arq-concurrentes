@@ -1,27 +1,77 @@
 package tp
-
-import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.ActorRef
+import akka.actor.typed.ActorSystem
+import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import tp.NotifierSpawner.NewNotification
+
+//#Notifier-actor
+object Notifier {
+  final case class Notification(whom: String, replyTo: ActorRef[Notified])
+  final case class Notified(whom: String, from: ActorRef[Notification])
+
+  def apply(): Behavior[Notification] = Behaviors.receive { (context, message) =>
+    context.log.info("Hello {}!", message.whom)
+    //#Notifier-send-messages
+    message.replyTo ! Notified(message.whom, context.self)
+    //#Notifier-send-messages
+    Behaviors.same
+  }
+}
+//#Notifier-actor
+
+//#Notifier-bot
+object NotifierBot {
+
+  def apply(max: Int): Behavior[Notifier.Notified] = {
+    bot(0, max)
+  }
+
+  private def bot(notificationingCounter: Int, max: Int): Behavior[Notifier.Notified] =
+    Behaviors.receive { (context, message) =>
+      val n = notificationingCounter + 1
+      context.log.info("Notification {} for {}", n, message.whom)
+      if (n == max) {
+        Behaviors.stopped
+      } else {
+        message.from ! Notifier.Notification(message.whom, context.self)
+        bot(n, max)
+      }
+    }
+}
+//#Notifier-bot
+
+//#Notifier-main
+object NotifierSpawner {
+
+  final case class NewNotification(name: String) //NewNotification
+
+  def apply(): Behavior[NewNotification] =
+    Behaviors.setup { context =>
+      //#create-actors
+      val notifier = context.spawn(Notifier(), "Notifier") //notifier
+      //#create-actors
+
+      Behaviors.receiveMessage { message =>
+        //#create-actors
+        val replyTo = context.spawn(NotifierBot(max = 3), message.name) //notified
+        //#create-actors
+        notifier ! Notifier.Notification(message.name, replyTo)
+        Behaviors.same
+      }
+    }
+}
+//Acá empieza! Es el main (System)
 
 object TP extends App {
 
-  import Demo._
-  val system_supervisor: ActorSystem[Demo.SayHello] = ActorSystem(Demo.greeter, "BS");
-  system_supervisor ! SayHello("Lucas");
-  system_supervisor ! SayHello("Sarasa");
-}
+  //#actor-system
+  val notifierSpawner: ActorSystem[NotifierSpawner.NewNotification] = ActorSystem(NotifierSpawner(), "NotifierSpawner")
+  //#actor-system
 
-/**
- * Actor para pruebas, TODO eliminar
- */
-object Demo {
-
-  final case class SayHello(name: String)
-
-  val greeter: Behavior[SayHello] = Behaviors.receive { (context, message) =>
-    println(s"Hello ${message.name}");
-    Behaviors.same;
-  }
+  //#main-send-messages
+  notifierSpawner ! NewNotification("Auction")
+  //#main-send-messages
 }
 
 /**
@@ -30,21 +80,6 @@ object Demo {
  */
 case class BuyersSubscriptor() {
   // TODO
-}
-
-/**
- * Encargado de asignar a actores Notifier la tarea de enviar una notificación, previamente obeniendo la lista de
- * compradores del BuyersSubscriptor
- */
-object NotifierSpawner {
-  // TODO manter un pool fijo y reutilizarlos
-}
-
-/**
- * Actor que se encarga de enviar un mensaje de notificación a una lista de destinatarios
- */
-class Notifier {
-
 }
 
 /**
