@@ -23,7 +23,7 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Command
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
   import Models._
   // If ask takes more time than this to complete the request is failed
-  private implicit val timeout = Timeout.create(system.settings.config.getDuration("my-app.routes.ask-timeout"))
+  private implicit val timeout = Timeout.create(system.settings.config.getDuration("my-app.server.routes.ask-timeout"))
 
   /**
    * Route definitions for application
