@@ -1,4 +1,4 @@
-package iasc.g4
+package iasc.g4.models
 
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 

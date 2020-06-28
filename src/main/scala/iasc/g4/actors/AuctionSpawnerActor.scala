@@ -2,7 +2,7 @@ package iasc.g4.actors
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
-import iasc.g4.Models.{Auction, Auctions, Command, OperationPerformed}
+import iasc.g4.models.Models.{Auction, Auctions, Command, OperationPerformed}
 
 /**
  * Actor spawner de Auctions. Maneja nuevas subastas, su cancelación, etc
@@ -20,10 +20,10 @@ object AuctionSpawnerActor {
   def apply(): Behavior[Command] = auctions(Set.empty)
 
   // comportamiento del actor
-  private def auctions(users: Set[Auction]): Behavior[Command] =
+  private def auctions(auctions: Set[Auction]): Behavior[Command] =
     Behaviors.receiveMessage {
       case GetAuctions(replyTo) =>
-        replyTo ! Auctions(Set.empty)
+        replyTo ! Auctions(auctions)
         Behaviors.same
       case DeleteAuction(auctionId, replyTo) =>
         // TODO implementar

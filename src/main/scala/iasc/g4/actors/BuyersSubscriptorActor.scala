@@ -2,7 +2,7 @@ package iasc.g4.actors
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import iasc.g4.Models.{Buyer, Buyers, Command, OperationPerformed}
+import iasc.g4.models.Models.{Buyer, Buyers, Command, OperationPerformed}
 
 /**
  * Actor que suscribe un nuevo comprador y mantiene una lista con los mismos.</br>

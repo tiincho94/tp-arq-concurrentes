@@ -4,8 +4,10 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
+
 import scala.io.StdIn
 import iasc.g4.actors._
+import iasc.g4.routes.Routes
 
 object Application extends App {
 

@@ -1,18 +1,18 @@
-package iasc.g4
+package iasc.g4.routes
 
+import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.event.Logging
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
-import akka.actor.typed.scaladsl.AskPattern._
-import akka.event.Logging
 import akka.util.Timeout
-import iasc.g4.Models.Command
 import iasc.g4.actors.AuctionSpawnerActor.GetAuctions
 import iasc.g4.actors.BuyersSubscriptorActor.GetBuyers
+import iasc.g4.models.Models.Command
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
-import ExecutionContext.Implicits.global
 
 /**
  * Definición de rutas de la API HTTP con su vinculación a los diferentes actores
@@ -22,7 +22,7 @@ import ExecutionContext.Implicits.global
 class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Command])(implicit val system: ActorSystem[_]) {
 
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-  import Models._
+  import iasc.g4.models.Models._
   // If ask takes more time than this to complete the request is failed
   private implicit val timeout = Timeout.create(system.settings.config.getDuration("my-app.server.routes.ask-timeout"))
 
