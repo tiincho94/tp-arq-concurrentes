@@ -1,1 +1,7 @@
-README
+TP Arquitecturas concurrentes
+
+Para levantar el proyecto, una vez en la carperta y consola de sbt:
+-Levantar el nodo semilla: runMain iacs.gp4.App administrator 25251
+-Levantar el 2do nodo semilla: runMain iacs.gp4.App administrator 25252
+
+-Levantar nodo AuctionSpwaner: runMain iacs.gp4.App AuctionSpawner 0 
