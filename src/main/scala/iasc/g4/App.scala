@@ -2,6 +2,7 @@ package iasc.g4
 
 import akka.actor.typed.{ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.cluster.MemberStatus
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 
@@ -24,7 +25,7 @@ object App{
     implicit val classicSystem: akka.actor.ActorSystem = system.classicSystem
     import system.executionContext
 
-    val port = system.settings.config.getInt("my-app.server.port")
+    val port = system.settings.config.getInt("akka.server.port")
     val futureBinding = Http().bindAndHandle(routes, "localhost", port)
     println(s"Server online at http://localhost:$port/\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
@@ -58,12 +59,8 @@ object App{
         startHttpServer(routeDefs.routes(), context.system)
       }
 
-      //val userSubscriber = context.spawn(BuyersSubscriptorActor(), "UserSubscriberActor")
-      //val auctionSpawner = context.spawn(AuctionSpawnerActor(), "AuctionSpawnerActor")
-      //context.watch(userSubscriber)
-      //context.watch(auctionSpawner)
-      //val routeDefs = new Routes(userSubscriber, auctionSpawner) (context.system)
-      //startHttpServer(routeDefs.routes(), context.system)
+      println("CLUSTERRRR:" + cluster.state.getMembers)
+
       Behaviors.empty
     }
   }
