@@ -37,30 +37,25 @@ object App{
   object RootBehavior {
 
     def apply(): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
-      println(s"SERVER STARTS")
       val cluster = Cluster(context.system)
       println(cluster.selfMember)
 
       if (cluster.selfMember.hasRole("administrator")) {
-        println("Administrator")
         val workersPerNode =
           context.system.settings.config.getInt("transformation.workers-per-node")
         (1 to workersPerNode).foreach { n =>
-          context.spawn(AuctionActor(), s"Worker$n")
-          println("Worker Created:" + n)
+          context.spawn(Worker(), s"Worker$n")
         }
       }
+
       if (cluster.selfMember.hasRole("AuctionSpawner")) {
         val auctionSpawner = context.spawn(AuctionSpawnerActor(), "AuctionSpawner")
         context.watch(auctionSpawner)
         val userSubscriber = context.spawn(BuyersSubscriptorActor(), "UserSubscriberActor")
         context.watch(userSubscriber)
-        val routeDefs = new Routes(userSubscriber, auctionSpawner)(context.system)
-        startHttpServer(routeDefs.routes(), context.system)
+        //val routeDefs = new Routes(userSubscriber, auctionSpawner)(context.system)
+        //startHttpServer(routeDefs.routes(), context.system)
       }
-
-      println("CLUSTERRRR:" + cluster.state.getMembers)
-
       Behaviors.empty
     }
   }
