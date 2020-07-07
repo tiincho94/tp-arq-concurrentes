@@ -8,7 +8,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
 import akka.util.Timeout
 import iasc.g4.actors.AuctionSpawnerActor.GetAuctions
-import iasc.g4.actors.BuyersSubscriptorActor.GetBuyers
+import iasc.g4.actors.BuyersSubscriptorActor.{CreateBuyer, GetBuyers}
 import iasc.g4.models.Models.Command
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -34,9 +34,9 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Command
     def getBuyers(): Future[Buyers] = {
       userSubscriber.ask(GetBuyers)
     }
-    def createBuyer(newBuyer: Buyer): Future[String] = Future {
-      // TODO integrar con actor
-      "ok!"
+
+    def createBuyer(newBuyer: Buyer): Future[String] = {
+      userSubscriber.ask(CreateBuyer(newBuyer,_))
     }
 
     val routes: Route = pathPrefix("buyers") {
