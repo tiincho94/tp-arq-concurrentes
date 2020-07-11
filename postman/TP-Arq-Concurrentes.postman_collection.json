@@ -1,0 +1,94 @@
+{
+	"info": {
+		"_postman_id": "0be44597-6c48-467b-9604-f1b0d5c57e2d",
+		"name": "TP-Arq-Concurrentes",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Post buyer1",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\": \"Buyer1\",\r\n    \"ip\": \"10.1.20.16\",\r\n    \"tags\": [\"Compu\", \"PC\", \"Electronica\"]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8081/buyers",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"buyers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Post buyer2",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\": \"Buyer2\",\r\n    \"ip\": \"201.16.200.85\",\r\n    \"tags\": [\"Heladeras\", \"Casa\", \"Electronica\"]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8081/buyers",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"buyers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get buyers",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\": \"Buyer1\",\r\n    \"ip\": \"10.1.20.16\",\r\n    \"tags\": [\"Compu\", \"PC\", \"Electronica\"]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8081/buyers",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"buyers"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}

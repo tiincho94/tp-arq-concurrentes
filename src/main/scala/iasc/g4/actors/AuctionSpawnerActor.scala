@@ -27,9 +27,9 @@ object AuctionSpawnerActor {
   //  libremente nuevas y en una segunda meter lo que pide el escenario 7
 
   // definición de commands (acciones a realizar)
-  final case class GetAuctions(replyTo: ActorRef[Auctions]) extends Command
-  final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends Command
-  final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends Command
+  final case class GetAuctions(replyTo: ActorRef[Auctions]) extends Event
+  final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends Event
+  final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends Event
 
   sealed trait Event
   private case object Tick extends Event
@@ -48,7 +48,7 @@ object AuctionSpawnerActor {
           WorkersUpdated(workers)
       }
       ctx.system.receptionist ! Receptionist.Subscribe(Worker.WorkerServiceKey, subscriptionAdapter)
-
+      auctions(Set.empty)
       timers.startTimerWithFixedDelay(Tick, Tick, 2.seconds)
 
       running(ctx, IndexedSeq.empty, jobCounter = 0)
@@ -88,7 +88,7 @@ object AuctionSpawnerActor {
 
 
   // comportamiento del actor
-  /**private def auctions(auctions: Set[Auction]): Behavior[Command] =
+ private def auctions(auctions: Set[Auction]): Behavior[Event] =
     Behaviors.receiveMessage {
       case GetAuctions(replyTo) =>
         replyTo ! Auctions(auctions)
@@ -102,5 +102,4 @@ object AuctionSpawnerActor {
         replyTo ! OperationPerformed("TBD")
         Behaviors.same
     }
-   **/
 }

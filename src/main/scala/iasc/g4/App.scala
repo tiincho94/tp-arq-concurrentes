@@ -59,8 +59,9 @@ object App{
         context.watch(auctionSpawner)
         val userSubscriber = context.spawn(BuyersSubscriptorActor(), "UserSubscriberActor")
         context.watch(userSubscriber)
-        //val routeDefs = new Routes(userSubscriber, auctionSpawner)(context.system)
-        //startHttpServer(routeDefs.routes(), context.system)
+
+        val routeDefs = new Routes(userSubscriber, auctionSpawner)(context.system)
+        startHttpServer(routeDefs.routes(), context.system)
       }
       Behaviors.empty
     }
