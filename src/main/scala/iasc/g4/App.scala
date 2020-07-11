@@ -1,5 +1,6 @@
 package iasc.g4
 
+import akka.NotUsed
 import akka.actor.typed.{ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.MemberStatus
@@ -11,6 +12,8 @@ import iasc.g4.actors._
 import iasc.g4.routes.Routes
 import akka.cluster.typed.Cluster
 import com.typesafe.config.ConfigFactory
+import akka.actor.typed.scaladsl.adapter._
+import scala.concurrent.duration._
 
 object App{
 
@@ -37,33 +40,33 @@ object App{
   object RootBehavior {
 
     def apply(): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
-      println(s"SERVER STARTS")
       val cluster = Cluster(context.system)
       println(cluster.selfMember)
 
       if (cluster.selfMember.hasRole("administrator")) {
-        println("Administrator")
         val workersPerNode =
           context.system.settings.config.getInt("transformation.workers-per-node")
         (1 to workersPerNode).foreach { n =>
-          context.spawn(AuctionActor(), s"Worker$n")
-          println("Worker Created:" + n)
+          context.spawn(Worker(), s"Worker$n")
         }
       }
+
       if (cluster.selfMember.hasRole("AuctionSpawner")) {
+        context.system.scheduler.scheduleAtFixedRate(0.seconds, 2.seconds)(()=> {
+          println("Miembros cluster:" + cluster.state.getMembers)
+        })(context.executionContext)
         val auctionSpawner = context.spawn(AuctionSpawnerActor(), "AuctionSpawner")
         context.watch(auctionSpawner)
         val userSubscriber = context.spawn(BuyersSubscriptorActor(), "UserSubscriberActor")
         context.watch(userSubscriber)
+
         val routeDefs = new Routes(userSubscriber, auctionSpawner)(context.system)
         startHttpServer(routeDefs.routes(), context.system)
       }
-
-      println("CLUSTERRRR:" + cluster.state.getMembers)
-
       Behaviors.empty
     }
-  }
+    }
+
 
   def main(args: Array[String]): Unit = {
       require(args.length == 2, "Usage: role port")

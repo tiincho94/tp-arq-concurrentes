@@ -9,17 +9,22 @@ import iasc.g4.models.Models.{Buyer, Buyers, Command, OperationPerformed}
  * También permite consultar la lista de compradores
  */
 object BuyersSubscriptorActor {
+  var buyersSet = Set[Buyer]()
   // definición de commands (acciones a realizar)
   final case class GetBuyers(replyTo: ActorRef[Buyers]) extends Command
+  final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends Command
 
   // instanciación del objeto
-  def apply(): Behavior[Command] = buyers(Set.empty)
-
-  // comportamiento del actor
-  private def buyers(users: Set[Buyer]): Behavior[Command] =
+  def apply(): Behavior[Command] =
     Behaviors.receiveMessage {
-      case GetBuyers(replyTo) =>
-        replyTo ! Buyers(Set.empty)
-        Behaviors.same
-    }
+    case GetBuyers(replyTo) =>
+      replyTo ! Buyers(buyersSet)
+      Behaviors.same
+    case CreateBuyer(buyer,replyTo) =>
+      buyersSet+=buyer
+      replyTo ! "Buyer creado"
+      Behaviors.same
+  }
+
+
 }
