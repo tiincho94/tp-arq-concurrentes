@@ -19,26 +19,32 @@ object NotifierSpawnerActor {
       val notifier = context.spawn(NotifierActor(), "Notifier") //notifier
       //#create-actors
 
-      Behaviors.receiveMessage { message =>
-        //#create-actors
-        val replyTo = context.spawn(NotifierBot(max = 3), message.name) //notified
-        //#create-actors
-        notifier ! NotifierActor.Notification(message.name, replyTo)
+      Behaviors.receiveMessage { newAuction =>
+
+        // Como le notifico a ESE buyer interesado ?
+
+        val replyTo = context.spawn(NotifierBot(max = 3), newAuction.title)
+        notifier ! NotifierActor.Notification(newAuction.title, buyer)
         Behaviors.same
       }
     }
 
-  // instanciación del objeto
-  def apply(): Behavior[Command] = notifiers(Set.empty)
-
-  // comportamiento del actor
-  private def notifiers(users: Set[Buyer]): Behavior[Command] =
-    Behaviors.receiveMessage {
-      case NotifyBuyers(replyTo) =>
-        replyTo ! OperationPerformed("TBD")
-        Behaviors.same
-    }
+//  // instanciación del objeto
+//  def apply(): Behavior[Command] = notifiers(Set.empty)
+//
+//  // comportamiento del actor
+//  private def notifiers(users: Set[Buyer]): Behavior[Command] =
+//    Behaviors.receiveMessage {
+//      case NotifyBuyers(replyTo) =>
+//        replyTo ! OperationPerformed("TBD")
+//        Behaviors.same
+//    }
 }
+
+// newAuction.title
+// newAuction.owner
+// newAuction.whom
+
 
 //#Notifier-bot
 object NotifierBot {
@@ -48,13 +54,13 @@ object NotifierBot {
   }
 
   private def bot(notificationingCounter: Int, max: Int): Behavior[NotifierActor.Notified] =
-    Behaviors.receive { (context, message) =>
+    Behaviors.receive { (context, newAuction) =>
       val n = notificationingCounter + 1
-      context.log.info("Notification {} for {}", n, message.whom)
+      context.log.info("Notification {} for {}", n, newAuction.whom)
       if (n == max) {
         Behaviors.stopped
       } else {
-        message.from ! NotifierActor.Notification(message.whom, context.self)
+        newAuction.owner ! NotifierActor.Notification(newAuction.whom, context.self)
         bot(n, max)
       }
     }

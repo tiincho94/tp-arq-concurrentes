@@ -7,13 +7,11 @@ import iasc.g4.models.Models.{Command, OperationPerformed}
  */
 class NotifierActor {
   final case class Notification(whom: String, replyTo: ActorRef[Notified])
-  final case class Notified(whom: String, from: ActorRef[Notification])
+  final case class Notified(whom: String, owner: ActorRef[Notification])
 
-  def apply(): Behavior[Notification] = Behaviors.receive { (context, message) =>
-    context.log.info("Hello {}!", message.whom)
-    //#Notifier-send-messages
-    message.replyTo ! Notified(message.whom, context.self)
-    //#Notifier-send-messages
+  def apply(): Behavior[Notification] = Behaviors.receive { (ctx, message) =>
+    ctx.log.info("New auction that may interest you!", message.whom)
+    message.replyTo ! Notified(message.whom, ctx.self)
     Behaviors.same
   }
 }
