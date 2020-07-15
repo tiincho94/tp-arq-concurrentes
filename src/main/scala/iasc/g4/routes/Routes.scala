@@ -9,6 +9,7 @@ import akka.http.scaladsl.server.{ExceptionHandler, Route}
 import akka.util.Timeout
 import iasc.g4.actors.AuctionSpawnerActor.{Event, GetAuctions}
 import iasc.g4.actors.BuyersSubscriptorActor.{CreateBuyer, GetBuyers}
+import iasc.g4.actors.NotifierSpawnerActor.{NotifyBuyers}
 import iasc.g4.models.Models.Command
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -18,8 +19,9 @@ import scala.concurrent._
  * Definición de rutas de la API HTTP con su vinculación a los diferentes actores
  * @param userSubscriber
  * @param auctionSpawner
+ * @param notifierSpawner
  */
-class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event])(implicit val system: ActorSystem[_]) {
+class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event], notifierSpawner: ActorRef[Command])(implicit val system: ActorSystem[_]) {
 
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
   import iasc.g4.models.Models._
@@ -55,6 +57,28 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event])
         )
       )
     }
+  }
+
+  object NotifierRoutes {
+
+    def notify(buyers: Buyers): Future[String] = {
+      notifierSpawner.ask(NotifyBuyers(buyers,_))
+    }
+
+    val routes: Route = pathPrefix("notify") {
+      concat(
+        pathEnd(
+          concat(
+            post {
+              entity(as[Buyers]) { buyers =>
+                complete(StatusCodes.Created, notify(buyers))
+              }
+            }
+          )
+        )
+      )
+
+  }
   }
 
   object AuctionRoutes {
@@ -115,7 +139,7 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event])
 
     handleExceptions(customHandler) {
       logRequestResult(("HTTP Request Result", Logging.InfoLevel)) {
-        concat(AuctionRoutes.routes, BuyersRoutes.routes)
+        concat(AuctionRoutes.routes, BuyersRoutes.routes, NotifierRoutes.routes)
       }
     }
   }
