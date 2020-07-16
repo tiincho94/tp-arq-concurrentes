@@ -1,13 +1,11 @@
 package iasc.g4.actors
 
-import akka.actor.typed.receptionist.Receptionist
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.util.Timeout
 import iasc.g4.models.Models.{Auction, Auctions, Command, OperationPerformed}
 
 import scala.util.{Failure, Success}
-
 import scala.concurrent.duration._
 import akka.util.Timeout
 import akka.actor.typed.ActorRef
@@ -26,10 +24,14 @@ object AuctionSpawnerActor {
   // TODO Revisar Escenario 7 de la consigna -> Debería no ser fijo, primer implementación sería crear
   //  libremente nuevas y en una segunda meter lo que pide el escenario 7
 
+  trait AuctionSpawnerCommand extends Command
+
+  val AuctionSpawnerServiceKey = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
+
   // definición de commands (acciones a realizar)
-  final case class GetAuctions(replyTo: ActorRef[Auctions]) extends Event
-  final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends Event
-  final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends Event
+  final case class GetAuctions(replyTo: ActorRef[Auctions]) extends AuctionSpawnerCommand
+  final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
+  final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
 
   sealed trait Event
   private case object Tick extends Event
@@ -49,7 +51,7 @@ object AuctionSpawnerActor {
       }
       ctx.system.receptionist ! Receptionist.Subscribe(Worker.WorkerServiceKey, subscriptionAdapter)
       auctions(Set.empty)
-      timers.startTimerWithFixedDelay(Tick, Tick, 2.seconds)
+      timers.startTimerWithFixedDelay(Tick, Tick, 30.seconds)
 
       running(ctx, IndexedSeq.empty, jobCounter = 0)
     }
@@ -88,7 +90,7 @@ object AuctionSpawnerActor {
 
 
   // comportamiento del actor
- private def auctions(auctions: Set[Auction]): Behavior[Event] =
+ private def auctions(auctions: Set[Auction]): Behavior[Command] =
     Behaviors.receiveMessage {
       case GetAuctions(replyTo) =>
         replyTo ! Auctions(auctions)

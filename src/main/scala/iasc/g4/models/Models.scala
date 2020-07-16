@@ -1,12 +1,13 @@
 package iasc.g4.models
 
+import iasc.g4.CborSerializable
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 /**
  * Modelos de la app y su transformación a JSON
  */
 object Models {
-  trait Command;
+  trait Command extends CborSerializable;
   final case class OperationPerformed(description: String)
   final case class Buyer(name: String, ip: String, tags: Set[String])
   final case class Buyers(buyers: Set[Buyer])

@@ -1,7 +1,9 @@
 package iasc.g4.actors
 
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import iasc.g4.CborSerializable
 import iasc.g4.models.Models.{Buyer, Buyers, Command, OperationPerformed}
 
 /**
@@ -9,22 +11,34 @@ import iasc.g4.models.Models.{Buyer, Buyers, Command, OperationPerformed}
  * También permite consultar la lista de compradores
  */
 object BuyersSubscriptorActor {
+
+  trait BuyersSubscriptorCommand extends Command
+
+  val BuyersSubscriptorServiceKey = ServiceKey[BuyersSubscriptorCommand]("BuyerSubscriptor")
+
   var buyersSet = Set[Buyer]()
-  // definición de commands (acciones a realizar)
-  final case class GetBuyers(replyTo: ActorRef[Buyers]) extends Command
-  final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends Command
+
+  final case class GetBuyers(replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
+  final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
   // instanciación del objeto
-  def apply(): Behavior[Command] =
-    Behaviors.receiveMessage {
-    case GetBuyers(replyTo) =>
-      replyTo ! Buyers(buyersSet)
-      Behaviors.same
-    case CreateBuyer(buyer,replyTo) =>
-      buyersSet+=buyer
-      replyTo ! "Buyer creado"
-      Behaviors.same
-  }
-
-
+  def apply(): Behavior[BuyersSubscriptorCommand] =
+    Behaviors.setup { ctx =>
+      ctx.log.info("Configurando BuyerSubscriptor")
+      ctx.system.receptionist ! Receptionist.Register(BuyersSubscriptorServiceKey, ctx.self)
+      Behaviors.receiveMessage {
+        case GetBuyers(replyTo) =>
+          println("get buyers...")
+          replyTo ! Buyers(buyersSet)
+          Behaviors.same
+        case CreateBuyer(buyer,replyTo) =>
+          println("create buyer...")
+          buyersSet+=buyer
+          replyTo ! "Buyer creado"
+          Behaviors.same
+        case _ =>
+          println("Ignorando mensaje inesperado...")
+          Behaviors.same
+      }
+    }
 }
