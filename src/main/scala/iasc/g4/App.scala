@@ -59,6 +59,9 @@ object App{
       }else if (cluster.selfMember.hasRole("buyers-subscriptor")) {
         context.spawn(BuyersSubscriptorActor(), "BuyerSubscriptor")
 
+      }else if (cluster.selfMember.hasRole("listener")) {
+        context.spawn(SimpleClusterListener(), "SimpleClusterListener")
+
       } else if (cluster.selfMember.hasRole("http-server")) {
         context.system.scheduler.scheduleAtFixedRate(0.seconds, 2.seconds)(()=> {
           println("Miembros cluster:" + cluster.state.getMembers)
