@@ -39,16 +39,15 @@ object AuctionSpawnerActor {
     ctx.log.info("Configurando AuctionSpawner")
     ctx.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, ctx.self)
 
-    val group = Routers.group(AuctionActor.AuctionActorServiceKey).withConsistentHashingRouting(1,{(arg)=>1.toString})
-    val router2 = ctx.spawn(group, "worker-group");
+    // val group = Routers.group(AuctionActor.AuctionActorServiceKey).withConsistentHashingRouting(1,{(arg)=>1.toString})
+    // val router2 = ctx.spawn(group, "worker-group");
 
     (0 to 1).foreach { n =>
-      val pool = Routers.pool(poolSize = 1)(
-      // make sure the workers are restarted if they fail
-      Behaviors.supervise(AuctionActor()).onFailure[Exception](SupervisorStrategy.resume))
-      val router = ctx.spawn(pool, "auction"+n.toString(),DispatcherSelector.sameAsParent())
-      router ! AuctionActor.Init(n,ctx.self)
-      this.auctionPool += auctionPoolEntity.getAuctionInstance(n,router)
+      val behavior: AuctionActor = new AuctionActor(ctx)
+      val ref : ActorRef[Command] = ctx.spawn(behavior, s"Auction$n")
+      Behaviors.supervise(behavior).onFailure[Exception](SupervisorStrategy.resume)
+      ref ! AuctionActor.Init(n, ctx.self)
+      this.auctionPool += auctionPoolEntity.getAuctionInstance(n, ref)
     }
 
     auctionPoolEntity.set(this.auctionPool)

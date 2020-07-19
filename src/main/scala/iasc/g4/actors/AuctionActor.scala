@@ -5,12 +5,10 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.receptionist.ServiceKey
-import akka.actor.typed.scaladsl.Behaviors
-import iasc.g4.CborSerializable
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import iasc.g4.actors.BuyersSubscriptorActor.GetBuyers
 import iasc.g4.models.Models.{Auction, Buyers}
 import iasc.g4.util.Util.{getActors, getTimeout}
-import akka.actor.typed.scaladsl.ActorContext
 
 import scala.concurrent.duration._
 import iasc.g4.models.Models.{Command, OperationPerformed}
@@ -21,6 +19,8 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.stream.ActorMaterializer
 import cats.Inject
+import iasc.g4.CborSerializable
+import iasc.g4.actors.AuctionActor._
 import iasc.g4.actors.AuctionSpawnerActor.{Event, FreeAuction}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -30,8 +30,15 @@ import scala.concurrent.Future
  * Actor que maneja una subasta
  */
 object AuctionActor {
+  // para definir "variables de clase"
+  final case class TransformText(text: String, replyTo: ActorRef[TextTransformed]) extends Command
+  final case class TextTransformed(text: String) extends CborSerializable
+  final case class StartAuction(auctionId:String, newAuction: Auction, replyTo: ActorRef[String]) extends Command
+  final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
+  final case class EndAuction() extends Command
+}
 
-  sealed trait Event
+class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Command](context) {
 
   var id : String = ""
   var index : Long = 0L
@@ -42,22 +49,28 @@ object AuctionActor {
   var highestBidder : String = "http://localhost:8080/subastaGanada?id="
   var auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand] = _
 
-  val AuctionActorServiceKey = ServiceKey[AuctionActor.TransformText]("AuctionActor")
+  // val AuctionActorServiceKey = ServiceKey[TransformText]("AuctionActor")
 
 
-  sealed trait Command
-  final case class TransformText(text: String, replyTo: ActorRef[TextTransformed]) extends Command with CborSerializable
-  final case class TextTransformed(text: String) extends CborSerializable
-  final case class StartAuction(auctionId:String, newAuction: Auction, replyTo: ActorRef[String]) extends Command
-  final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
-  final case class EndAuction() extends Command
 
-  def apply(): Behavior[Command] =
+  def makeHttpCall(_uri : String):Unit = {
+    implicit val system = ActorSystem()
+    implicit val materializer = ActorMaterializer()
+    implicit val executionContext = system.dispatcher
+    val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = _uri))
+    responseFuture
+      .onComplete {
+        case Success(res) => OperationPerformed("TBD")
+        case Failure(_)   => sys.error("----------------------------------------------------------------------------------------------------------------something wrong")
+      }
+  }
+
+  override def onMessage(msg: Command): Behavior[Command] =
     Behaviors.setup { ctx =>
 
       // each worker registers themselves with the receptionist
-      printf("Registering myself with receptionist")
-      ctx.system.receptionist ! Receptionist.Register(AuctionActorServiceKey, ctx.self)
+      // printf("Registering myself with receptionist")
+      // ctx.system.receptionist ! Receptionist.Register(AuctionActorServiceKey, ctx.self)
       Behaviors.receiveMessage {
         case Init(index,auctionSpawner) =>
           this.index = index
@@ -81,16 +94,4 @@ object AuctionActor {
           Behaviors.same
       }
     }
-
-  def makeHttpCall(_uri : String):Unit = {
-    implicit val system = ActorSystem()
-    implicit val materializer = ActorMaterializer()
-    implicit val executionContext = system.dispatcher
-    val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = _uri))
-    responseFuture
-      .onComplete {
-        case Success(res) => OperationPerformed("TBD")
-        case Failure(_)   => sys.error("----------------------------------------------------------------------------------------------------------------something wrong")
-      }
-  }
 }

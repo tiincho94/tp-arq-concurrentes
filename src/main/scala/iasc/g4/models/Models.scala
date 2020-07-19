@@ -3,7 +3,7 @@ package iasc.g4.models
 import akka.actor.typed.ActorRef
 import iasc.g4.CborSerializable
 import iasc.g4.actors.AuctionActor
-import iasc.g4.models.Models.OperationPerformed
+import iasc.g4.models.Models.{Command, OperationPerformed}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 
 /**
@@ -28,7 +28,7 @@ abstract class AuctionInstance() {
   var index :Long
   var id:String
   var isFree:Boolean
-  var auction:ActorRef[AuctionActor.Command]
+  var auction:ActorRef[Command]
 
   def setIndex(_index:Long):Unit = {
     this.index = _index
@@ -42,10 +42,10 @@ abstract class AuctionInstance() {
   def getId(): String ={
     return id
   }
-  def setAuction(_actor: ActorRef[AuctionActor.Command]) = {
+  def setAuction(_actor: ActorRef[Command]) = {
     this.auction = _actor
   }
-  def getAuction(): ActorRef[AuctionActor.Command] ={
+  def getAuction(): ActorRef[Command] ={
     return auction
   }
   def setIsFree(_isFree : Boolean) = {

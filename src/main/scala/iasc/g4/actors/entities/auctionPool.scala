@@ -1,9 +1,8 @@
 package iasc.g4.actors.entities
 
+import akka.actor.typed.ActorRef
 import iasc.g4.models.AuctionInstance
-import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
-import iasc.g4.actors.AuctionActor
-import iasc.g4.actors.AuctionActor.Command
+import iasc.g4.models.Models.Command
 
 object auctionPoolEntity{
   var auctionPool = Set[AuctionInstance]()
@@ -12,7 +11,7 @@ object auctionPoolEntity{
     this.auctionPool = auctionPool
   }
 
-  def getAuctionActorById(id:String) : ActorRef[AuctionActor.Command] = {
+  def getAuctionActorById(id:String) : ActorRef[Command] = {
     var auctionAux = this.auctionPool.find(a => a.getId()==id)
     if (auctionAux==None)
       return null
@@ -30,7 +29,7 @@ object auctionPoolEntity{
     }
   }
 
-  def getFreeAuctionActor(id:String,replyTo: ActorRef[String]) : ActorRef[AuctionActor.Command] = {
+  def getFreeAuctionActor(id:String,replyTo: ActorRef[String]) : ActorRef[Command] = {
     var auctionAux = getAuctionActorById(id)
     if (auctionAux==null) {
       var auctionInstances =this.auctionPool.find(a => a.getIsFree())
@@ -49,11 +48,11 @@ object auctionPoolEntity{
     }
   }
 
-  def getAuctionInstance(_index:Long,router:ActorRef[AuctionActor.Command]) : AuctionInstance = {
+  def getAuctionInstance(_index:Long,router:ActorRef[Command]) : AuctionInstance = {
     var auctionInstance : AuctionInstance = new AuctionInstance() {
       override var id: String = null
       override var isFree: Boolean = true
-      override var auction: ActorRef[AuctionActor.Command] = router
+      override var auction: ActorRef[Command] = router
       override var index: Long = _index
     }
     return auctionInstance
