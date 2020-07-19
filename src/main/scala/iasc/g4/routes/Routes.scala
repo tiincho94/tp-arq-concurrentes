@@ -1,12 +1,14 @@
 package iasc.g4.routes
 
+import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.ActorContext
 import akka.event.Logging
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
-import iasc.g4.actors.BuyersSubscriptorActor
+import iasc.g4.actors.AuctionSpawnerActor.CreateAuction
+import iasc.g4.actors.{AuctionSpawnerActor, BuyersSubscriptorActor}
 import iasc.g4.actors.BuyersSubscriptorActor.{CreateBuyer, GetBuyers}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -70,17 +72,25 @@ class Routes(context: ActorContext[_]) {
       // TODO integrar con actor
       Option.empty
     }
-    def createAuction(newAuction: Auction): Future[String] = Future {
-      // TODO integrar con actor
-      "666"
+
+    def createAuction(auctionId:String, newAuction: Auction): Future[String] =  {
+      getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
+        if (!actors.isEmpty) {
+          actors.head.ask(CreateAuction(auctionId,newAuction,_))(timeout, context.system.scheduler)
+        } else {
+          Future.failed(new IllegalStateException("AuctionSpawner no disponible"))
+        }
+      )
     }
     def cancelAuction(auctionId: String): Future[String] = Future {
       // TODO integrar con actor
       "Ok!"
     }
 
-    val routes: Route = pathPrefix("auctions") {
-      concat(
+//    val routes: Route = pathPrefix("auctions") {
+  val routes: Route = pathPrefix("bids") {
+
+  concat(
         pathEnd(
           get {
             complete(getAuctions)
@@ -93,7 +103,7 @@ class Routes(context: ActorContext[_]) {
             },
             post {
               entity(as[Auction]) { newAuction =>
-                complete(StatusCodes.Created, createAuction(newAuction))
+                complete(StatusCodes.Created, createAuction(auctionId,newAuction))
               }
             },
             delete {

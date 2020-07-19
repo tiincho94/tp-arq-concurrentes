@@ -45,13 +45,13 @@ object App{
       println(cluster.selfMember)
 
       if (cluster.selfMember.hasRole("seed")) {
-        val workersPerNode =
-          context.system.settings.config.getInt("transformation.workers-per-node")
+        /*val workersPerNode = context.system.settings.config.getInt("transformation.workers-per-node")
         (1 to workersPerNode).foreach { n =>
           context.spawn(Worker(), s"Worker$n")
-        }
+        }*/
       } else if (cluster.selfMember.hasRole("notifier-spawner")) {
-        context.spawn(NotifierSpawnerActor(), "NotifierSpanwerActor")
+        //context.spawn(NotifierSpawnerActor(), "NotifierSpanwerActor")
+        context.spawn(NotifierSpawnerActor(), "NotifierSpanwer")
 
       } else if (cluster.selfMember.hasRole("auction-spawner")) {
         context.spawn(AuctionSpawnerActor(), "AuctionSpawner")
@@ -61,7 +61,7 @@ object App{
 
       } else if (cluster.selfMember.hasRole("http-server")) {
         context.system.scheduler.scheduleAtFixedRate(0.seconds, 2.seconds)(()=> {
-          println("Miembros cluster:" + cluster.state.getMembers)
+          //println("Miembros cluster:" + cluster.state.getMembers)
         })(context.executionContext)
         startHttpServer(new Routes(context).routes(), context.system)
       } else {

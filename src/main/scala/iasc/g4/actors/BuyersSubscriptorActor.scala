@@ -29,11 +29,11 @@ object BuyersSubscriptorActor {
       Behaviors.receiveMessage {
         case GetBuyers(replyTo) =>
           println("get buyers...")
-          replyTo ! Buyers(buyersSet)
+          replyTo ! Buyers(this.buyersSet)
           Behaviors.same
         case CreateBuyer(buyer,replyTo) =>
           println("create buyer...")
-          buyersSet+=buyer
+          this.buyersSet+=buyer
           replyTo ! "Buyer creado"
           Behaviors.same
         case _ =>

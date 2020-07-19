@@ -1,21 +1,15 @@
 package iasc.g4.actors
 
+import iasc.g4.models.AuctionInstance
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, SupervisorStrategy}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.util.Timeout
 import iasc.g4.models.Models.{Auction, Auctions, Command, OperationPerformed}
-
-import scala.util.{Failure, Success}
-import scala.concurrent.duration._
-import akka.util.Timeout
-import akka.actor.typed.ActorRef
-import akka.actor.typed.Behavior
-import akka.actor.typed.receptionist.Receptionist
-import akka.actor.typed.scaladsl.ActorContext
+import akka.actor.typed.scaladsl.Routers
 import akka.actor.typed.scaladsl.Behaviors
-
-import scala.util.Failure
-import scala.util.Success
+import akka.routing.Router
+import cats.syntax.group
+import iasc.g4.actors.AuctionSpawnerActor.auctionPool
+import iasc.g4.actors.entities.auctionPoolEntity
 
 /**
  * Actor spawner de Auctions. Maneja nuevas subastas, su cancelación, etc
@@ -26,13 +20,14 @@ object AuctionSpawnerActor {
 
   trait AuctionSpawnerCommand extends Command
 
+  var auctionPool = Set[AuctionInstance]()
   val AuctionSpawnerServiceKey = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
-
   // definición de commands (acciones a realizar)
   final case class GetAuctions(replyTo: ActorRef[Auctions]) extends AuctionSpawnerCommand
   final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
-  final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
-
+  // final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
+  final case class CreateAuction(auctionId:String,newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  final case class FreeAuction(id:String) extends AuctionSpawnerCommand
   sealed trait Event
   private case object Tick extends Event
   private final case class WorkersUpdated(newWorkers: Set[ActorRef[Worker.TransformText]]) extends Event
@@ -40,68 +35,42 @@ object AuctionSpawnerActor {
   private final case class JobFailed(why: String, text: String) extends Event
 
   // instanciación del objeto
-  //def apply(): Behavior[Command] = auctions(Set.empty)
+  def apply(): Behavior[Command] = Behaviors.setup { ctx =>
+    ctx.log.info("Configurando AuctionSpawner")
+    ctx.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, ctx.self)
 
-  def apply(): Behavior[Event] = Behaviors.setup { ctx =>
-    Behaviors.withTimers { timers =>
-      // subscribe to available workers
-      val subscriptionAdapter = ctx.messageAdapter[Receptionist.Listing] {
-        case Worker.WorkerServiceKey.Listing(workers) =>
-          WorkersUpdated(workers)
-      }
-      ctx.system.receptionist ! Receptionist.Subscribe(Worker.WorkerServiceKey, subscriptionAdapter)
-      auctions(Set.empty)
-      timers.startTimerWithFixedDelay(Tick, Tick, 30.seconds)
+    val group = Routers.group(AuctionActor.AuctionActorServiceKey).withConsistentHashingRouting(1,{(arg)=>1.toString})
+    val router2 = ctx.spawn(group, "worker-group");
 
-      running(ctx, IndexedSeq.empty, jobCounter = 0)
-    }
-  }
-
-  private def running(ctx: ActorContext[Event], workers: IndexedSeq[ActorRef[Worker.TransformText]], jobCounter: Int): Behavior[Event] =
-    Behaviors.receiveMessage {
-      case WorkersUpdated(newWorkers) =>
-        ctx.log.info("List of services registered with the receptionist changed: {}", newWorkers)
-        running(ctx, newWorkers.toIndexedSeq, jobCounter)
-      case Tick =>
-        if (workers.isEmpty) {
-          ctx.log.warn("Got tick request but no workers available, not sending any work")
-          Behaviors.same
-        } else {
-          // how much time can pass before we consider a request failed
-          implicit val timeout: Timeout = 5.seconds
-          val selectedWorker = workers(jobCounter % workers.size)
-          ctx.log.info("Sending work for processing to {}", selectedWorker)
-          val text = s"hello-$jobCounter"
-          ctx.ask(selectedWorker, Worker.TransformText(text, _)) {
-            case Success(transformedText) => TransformCompleted(transformedText.text, text)
-            case Failure(ex) => JobFailed("Processing timed out", text)
-          }
-          running(ctx, workers, jobCounter + 1)
-        }
-      case TransformCompleted(originalText, transformedText) =>
-        ctx.log.info("Got completed transform of {}: {}", originalText, transformedText)
-        Behaviors.same
-
-      case JobFailed(why, text) =>
-        ctx.log.warn("Transformation of text {} failed. Because: {}", text, why)
-        Behaviors.same
-
+    (0 to 1).foreach { n =>
+      val pool = Routers.pool(poolSize = 1)(
+      // make sure the workers are restarted if they fail
+      Behaviors.supervise(AuctionActor()).onFailure[Exception](SupervisorStrategy.resume))
+      val router = ctx.spawn(pool, "auction"+n.toString(),DispatcherSelector.sameAsParent())
+      router ! AuctionActor.Init(n,ctx.self)
+      this.auctionPool += auctionPoolEntity.getAuctionInstance(n,router)
     }
 
+    auctionPoolEntity.set(this.auctionPool)
 
-  // comportamiento del actor
- private def auctions(auctions: Set[Auction]): Behavior[Command] =
     Behaviors.receiveMessage {
       case GetAuctions(replyTo) =>
-        replyTo ! Auctions(auctions)
+        //replyTo ! Auctions(auctions)
         Behaviors.same
       case DeleteAuction(auctionId, replyTo) =>
         // TODO implementar
         replyTo ! OperationPerformed("TBD")
         Behaviors.same
-      case CreateAuction(newAuction, replyTo) =>
-        // TODO implementar
-        replyTo ! OperationPerformed("TBD")
+      case CreateAuction(auctionId,newAuction, replyTo) =>
+        var auctionActor = auctionPoolEntity.getFreeAuctionActor(auctionId,replyTo)
+        if(auctionActor!=null)
+          auctionActor ! AuctionActor.StartAuction(auctionId,newAuction,replyTo)
+        Behaviors.same
+      case FreeAuction(id) =>
+        auctionPoolEntity.freeAuction(id)
         Behaviors.same
     }
+  }
+
+
 }
