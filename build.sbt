@@ -16,7 +16,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream" % akkaVersion,
   "com.typesafe.akka" %% "akka-protobuf" % akkaVersion,
   "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
-  "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
-  "com.swissborg" %% "lithium" % "0.11.2"
+  "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
 )
 
