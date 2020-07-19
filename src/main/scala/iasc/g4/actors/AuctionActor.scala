@@ -7,11 +7,10 @@ import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.receptionist.ServiceKey
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import iasc.g4.actors.BuyersSubscriptorActor.GetBuyers
-import iasc.g4.models.Models.{Auction, Buyers}
+import iasc.g4.models.Models.{Auction, Bid, Buyers, Command, OperationPerformed}
 import iasc.g4.util.Util.{getActors, getTimeout}
 
 import scala.concurrent.duration._
-import iasc.g4.models.Models.{Command, OperationPerformed}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.{ActorSystem, Cancellable}
@@ -21,10 +20,11 @@ import akka.stream.ActorMaterializer
 import cats.Inject
 import iasc.g4.CborSerializable
 import iasc.g4.actors.AuctionActor._
-import iasc.g4.actors.AuctionSpawnerActor.{Event, FreeAuction}
+import iasc.g4.actors.AuctionSpawnerActor.{AuctionSpawnerCommand, Event, FreeAuction}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.Future
+import iasc.g4.util.Util._
 
 /**
  * Actor que maneja una subasta
@@ -34,6 +34,7 @@ object AuctionActor {
   final case class TransformText(text: String, replyTo: ActorRef[TextTransformed]) extends Command
   final case class TextTransformed(text: String) extends CborSerializable
   final case class StartAuction(auctionId:String, newAuction: Auction, replyTo: ActorRef[String]) extends Command
+  final case class MakeBid(newBid:Bid, replyTo: ActorRef[String]) extends Command
   final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction() extends Command
 }
@@ -51,28 +52,14 @@ class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Comm
 
   // val AuctionActorServiceKey = ServiceKey[TransformText]("AuctionActor")
 
-
-
-  def makeHttpCall(_uri : String):Unit = {
-    implicit val system = ActorSystem()
-    implicit val materializer = ActorMaterializer()
-    implicit val executionContext = system.dispatcher
-    val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = _uri))
-    responseFuture
-      .onComplete {
-        case Success(res) => OperationPerformed("TBD")
-        case Failure(_)   => sys.error("----------------------------------------------------------------------------------------------------------------something wrong")
-      }
-  }
-
   override def onMessage(msg: Command): Behavior[Command] =
     Behaviors.setup { ctx =>
-
       // each worker registers themselves with the receptionist
       // printf("Registering myself with receptionist")
       // ctx.system.receptionist ! Receptionist.Register(AuctionActorServiceKey, ctx.self)
       Behaviors.receiveMessage {
         case Init(index,auctionSpawner) =>
+          printf("Iniciando AuctionActor")
           this.index = index
           this.auctionSpawner = auctionSpawner
           Behaviors.same
@@ -87,6 +74,9 @@ class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Comm
           this.article = newAuction.article
           ctx.scheduleOnce(this.duration.seconds,ctx.self,EndAuction())
           replyTo ! "Auction index: "+this.index.toString()+"\nTimeout is "+this.duration.toString()
+          Behaviors.same
+        case MakeBid(newBid,replyTo) =>
+          //TODO: implementar
           Behaviors.same
         case EndAuction() =>
           makeHttpCall(this.highestBidder+this.id);

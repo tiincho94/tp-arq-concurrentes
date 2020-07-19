@@ -3,7 +3,7 @@ package iasc.g4.actors
 import iasc.g4.models.AuctionInstance
 import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, SupervisorStrategy}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import iasc.g4.models.Models.{Auction, Auctions, Command, OperationPerformed}
+import iasc.g4.models.Models.{Auction, Auctions, Bid, Buyer, Command, OperationPerformed}
 import akka.actor.typed.scaladsl.Routers
 import akka.actor.typed.scaladsl.Behaviors
 import akka.routing.Router
@@ -15,7 +15,7 @@ import iasc.g4.actors.entities.auctionPoolEntity
  * Actor spawner de Auctions. Maneja nuevas subastas, su cancelación, etc
  */
 object AuctionSpawnerActor {
-  // TODO Revisar Escenario 7 de la consigna -> Debería no ser fijo, primer implementación sería crear
+  //  TODO Revisar Escenario 7 de la consigna -> Debería no ser fijo, primer implementación sería crear
   //  libremente nuevas y en una segunda meter lo que pide el escenario 7
 
   trait AuctionSpawnerCommand extends Command
@@ -27,6 +27,7 @@ object AuctionSpawnerActor {
   final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
   // final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
   final case class CreateAuction(auctionId:String,newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  final case class MakeBid(auctionId:String, newBid:Bid, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
   final case class FreeAuction(id:String) extends AuctionSpawnerCommand
   sealed trait Event
   private case object Tick extends Event
@@ -43,9 +44,10 @@ object AuctionSpawnerActor {
     // val router2 = ctx.spawn(group, "worker-group");
 
     (0 to 1).foreach { n =>
+      printf("\n\n\nPor iniciar AuctionActor\n\n\n")
       val behavior: AuctionActor = new AuctionActor(ctx)
       val ref : ActorRef[Command] = ctx.spawn(behavior, s"Auction$n")
-      Behaviors.supervise(behavior).onFailure[Exception](SupervisorStrategy.resume)
+      //Behaviors.supervise(behavior).onFailure[Exception](SupervisorStrategy.resume)
       ref ! AuctionActor.Init(n, ctx.self)
       this.auctionPool += auctionPoolEntity.getAuctionInstance(n, ref)
     }
@@ -64,6 +66,11 @@ object AuctionSpawnerActor {
         var auctionActor = auctionPoolEntity.getFreeAuctionActor(auctionId,replyTo)
         if(auctionActor!=null)
           auctionActor ! AuctionActor.StartAuction(auctionId,newAuction,replyTo)
+        Behaviors.same
+      case MakeBid(auctionId,newBid,replyTo) =>
+        var auctionActor = auctionPoolEntity.getAuctionActorById(auctionId)
+        if(auctionActor!=null)
+          auctionActor ! AuctionActor.MakeBid(newBid,replyTo)
         Behaviors.same
       case FreeAuction(id) =>
         auctionPoolEntity.freeAuction(id)

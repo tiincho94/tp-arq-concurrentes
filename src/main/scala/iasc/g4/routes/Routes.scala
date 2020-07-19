@@ -7,7 +7,7 @@ import akka.event.Logging
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
-import iasc.g4.actors.AuctionSpawnerActor.CreateAuction
+import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, MakeBid}
 import iasc.g4.actors.{AuctionSpawnerActor, BuyersSubscriptorActor}
 import iasc.g4.actors.BuyersSubscriptorActor.{CreateBuyer, GetBuyers}
 
@@ -73,6 +73,16 @@ class Routes(context: ActorContext[_]) {
       Option.empty
     }
 
+    def makeBid(auctionId:String,newBid:Bid):Future[String] = {
+      getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
+        if (!actors.isEmpty) {
+          actors.head.ask(MakeBid(auctionId,newBid,_) (timeout, context.system.scheduler)
+        } else {
+          Future.failed(new IllegalStateException("AuctionSpawner no disponible"))
+        }
+      )
+    }
+
     def createAuction(auctionId:String, newAuction: Auction): Future[String] =  {
       getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
         if (!actors.isEmpty) {
@@ -104,6 +114,11 @@ class Routes(context: ActorContext[_]) {
             post {
               entity(as[Auction]) { newAuction =>
                 complete(StatusCodes.Created, createAuction(auctionId,newAuction))
+              }
+            },
+            put {
+              entity(as[Bid]) { newBid =>
+                complete(StatusCodes.Accepted, makeBid(auctionId,newBid))
               }
             },
             delete {

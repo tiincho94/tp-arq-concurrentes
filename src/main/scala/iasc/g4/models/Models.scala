@@ -16,6 +16,7 @@ object Models {
   final case class Buyers(buyers: Set[Buyer])
   final case class Auction(basePrice: Double, duration: Long, tags: Set[String], article: String)
   final case class Auctions(auctions: Set[Auction])
+  final case class Bid(buyerName : String, price : Double)
 
   import DefaultJsonProtocol._
   implicit val buyerJsonFormat: RootJsonFormat[Buyer] = jsonFormat3(Buyer)
