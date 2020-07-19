@@ -23,6 +23,7 @@ object Models {
   implicit val buyersJsonFormat: RootJsonFormat[Buyers] = jsonFormat1(Buyers)
   implicit val auctionJsonFormat: RootJsonFormat[Auction] = jsonFormat4(Auction)
   implicit val auctionsJsonFormat: RootJsonFormat[Auctions] = jsonFormat1(Auctions)
+  implicit val bidJsonFormat: RootJsonFormat[Bid] = jsonFormat2(Bid)
 }
 
 abstract class AuctionInstance() {

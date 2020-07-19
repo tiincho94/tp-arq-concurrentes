@@ -76,7 +76,7 @@ class Routes(context: ActorContext[_]) {
     def makeBid(auctionId:String,newBid:Bid):Future[String] = {
       getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
         if (!actors.isEmpty) {
-          actors.head.ask(MakeBid(auctionId,newBid,_) (timeout, context.system.scheduler)
+          actors.head.ask(MakeBid(auctionId,newBid,_)) (timeout, context.system.scheduler)
         } else {
           Future.failed(new IllegalStateException("AuctionSpawner no disponible"))
         }

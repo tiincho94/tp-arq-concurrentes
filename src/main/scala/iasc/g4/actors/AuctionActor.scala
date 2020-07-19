@@ -38,20 +38,22 @@ object AuctionActor {
   final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction() extends Command
 
-  def apply(): Behavior[Command] =
-    Behaviors.setup(ctx => new AuctionActor(ctx))
+  def apply(index:Long,auctionSpawner:ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]): Behavior[Command] =
+    Behaviors.setup(ctx => new AuctionActor(ctx,index,auctionSpawner))
 }
 
-private class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Command](context) {
+private class AuctionActor(
+                            context: ActorContext[Command],
+                            index:Long,
+                            auctionSpawner:ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]
+                          ) extends AbstractBehavior[Command](context) {
 
   var id : String = ""
-  var index : Long = 0L
   var price : Double = 0.0
   var duration : Long = 0
   var tags = Set[String]()
   var article : String = ""
   var highestBidder : String = "http://localhost:8080/subastaGanada?id="
-  var auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand] = _
 
   override def onMessage(msg: Command): Behavior[Command] =
     Behaviors.setup { ctx =>
@@ -59,11 +61,6 @@ private class AuctionActor(context: ActorContext[Command]) extends AbstractBehav
       // printf("Registering myself with receptionist")
       // ctx.system.receptionist ! Receptionist.Register(AuctionActorServiceKey, ctx.self)
       Behaviors.receiveMessage {
-        case Init(index,auctionSpawner) =>
-          printf("Iniciando AuctionActor")
-          this.index = index
-          this.auctionSpawner = auctionSpawner
-          Behaviors.same
         case TransformText(text, replyTo) =>
           replyTo ! TextTransformed(text.toUpperCase)
           Behaviors.same
@@ -78,6 +75,8 @@ private class AuctionActor(context: ActorContext[Command]) extends AbstractBehav
           Behaviors.same
         case MakeBid(newBid,replyTo) =>
           //TODO: implementar
+          this.price = newBid.price
+          replyTo ! "El nuevo precio es: "+this.price
           Behaviors.same
         case EndAuction() =>
           makeHttpCall(this.highestBidder+this.id);

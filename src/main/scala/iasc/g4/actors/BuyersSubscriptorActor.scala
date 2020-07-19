@@ -18,6 +18,7 @@ object BuyersSubscriptorActor {
 
   var buyersSet = Set[Buyer]()
 
+  final case class GetBuyer(name:String, replyTo: ActorRef[Buyer]) extends BuyersSubscriptorCommand
   final case class GetBuyers(replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
   final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
@@ -27,6 +28,10 @@ object BuyersSubscriptorActor {
       ctx.log.info("Configurando BuyerSubscriptor")
       ctx.system.receptionist ! Receptionist.Register(BuyersSubscriptorServiceKey, ctx.self)
       Behaviors.receiveMessage {
+        case GetBuyer(name,replyTo)=>
+          var buyer = getBuyer(name)
+          replyTo ! buyer
+          Behaviors.same
         case GetBuyers(replyTo) =>
           println("get buyers...")
           replyTo ! Buyers(this.buyersSet)
@@ -41,4 +46,10 @@ object BuyersSubscriptorActor {
           Behaviors.same
       }
     }
+
+  def getBuyer(name:String): Buyer ={
+    var buyerSetAux = buyersSet.find(buyer => buyer.name == name)
+    if (buyerSetAux==None) null
+    else buyerSetAux.head
+  }
 }
