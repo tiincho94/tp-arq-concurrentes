@@ -36,9 +36,12 @@ object AuctionActor {
   final case class StartAuction(auctionId:String, newAuction: Auction, replyTo: ActorRef[String]) extends Command
   final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction() extends Command
+
+  def apply(): Behavior[Command] =
+    Behaviors.setup(ctx => new AuctionActor(ctx))
 }
 
-class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Command](context) {
+private class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Command](context) {
 
   var id : String = ""
   var index : Long = 0L
@@ -49,9 +52,29 @@ class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Comm
   var highestBidder : String = "http://localhost:8080/subastaGanada?id="
   var auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand] = _
 
-  // val AuctionActorServiceKey = ServiceKey[TransformText]("AuctionActor")
-
-
+  override def onMessage(msg: Command): Behavior[Command] =
+    msg match {
+      case Init(index,auctionSpawner) =>
+        this.index = index
+        this.auctionSpawner = auctionSpawner
+        Behaviors.same
+      case TransformText(text, replyTo) =>
+        replyTo ! TextTransformed(text.toUpperCase)
+        Behaviors.same
+      case StartAuction(auctionId,newAuction,replyTo) =>
+        this.id = auctionId
+        this.price = newAuction.basePrice
+        this.duration = newAuction.duration
+        this.tags = newAuction.tags
+        this.article = newAuction.article
+        context.scheduleOnce(this.duration.seconds,context.self,EndAuction())
+        replyTo ! "Auction index: "+this.index.toString()+"\nTimeout is "+this.duration.toString()
+        Behaviors.same
+      case EndAuction() =>
+        makeHttpCall(this.highestBidder+this.id);
+        this.auctionSpawner ! FreeAuction(this.id)
+        Behaviors.same
+    }
 
   def makeHttpCall(_uri : String):Unit = {
     implicit val system = ActorSystem()
@@ -64,34 +87,4 @@ class AuctionActor(context: ActorContext[Command]) extends AbstractBehavior[Comm
         case Failure(_)   => sys.error("----------------------------------------------------------------------------------------------------------------something wrong")
       }
   }
-
-  override def onMessage(msg: Command): Behavior[Command] =
-    Behaviors.setup { ctx =>
-
-      // each worker registers themselves with the receptionist
-      // printf("Registering myself with receptionist")
-      // ctx.system.receptionist ! Receptionist.Register(AuctionActorServiceKey, ctx.self)
-      Behaviors.receiveMessage {
-        case Init(index,auctionSpawner) =>
-          this.index = index
-          this.auctionSpawner = auctionSpawner
-          Behaviors.same
-        case TransformText(text, replyTo) =>
-          replyTo ! TextTransformed(text.toUpperCase)
-          Behaviors.same
-        case StartAuction(auctionId,newAuction,replyTo) =>
-          this.id = auctionId
-          this.price = newAuction.basePrice
-          this.duration = newAuction.duration
-          this.tags = newAuction.tags
-          this.article = newAuction.article
-          ctx.scheduleOnce(this.duration.seconds,ctx.self,EndAuction())
-          replyTo ! "Auction index: "+this.index.toString()+"\nTimeout is "+this.duration.toString()
-          Behaviors.same
-        case EndAuction() =>
-          makeHttpCall(this.highestBidder+this.id);
-          this.auctionSpawner ! FreeAuction(this.id)
-          Behaviors.same
-      }
-    }
 }

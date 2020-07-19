@@ -43,8 +43,10 @@ object AuctionSpawnerActor {
     // val router2 = ctx.spawn(group, "worker-group");
 
     (0 to 1).foreach { n =>
-      val behavior: AuctionActor = new AuctionActor(ctx)
+      val behavior = AuctionActor()
+      println(s"Spawning auction $n...")
       val ref : ActorRef[Command] = ctx.spawn(behavior, s"Auction$n")
+      println(s"Auction $n ok: $ref")
       Behaviors.supervise(behavior).onFailure[Exception](SupervisorStrategy.resume)
       ref ! AuctionActor.Init(n, ctx.self)
       this.auctionPool += auctionPoolEntity.getAuctionInstance(n, ref)
