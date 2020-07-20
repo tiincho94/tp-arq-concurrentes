@@ -1,14 +1,11 @@
 package iasc.g4.actors
 
+import akka.actor.typed.scaladsl.AskPattern._
 import iasc.g4.models.AuctionInstance
 import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, SupervisorStrategy}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import iasc.g4.models.Models.{Auction, Auctions, Bid, Buyer, Command, OperationPerformed}
-import akka.actor.typed.scaladsl.Routers
 import akka.actor.typed.scaladsl.Behaviors
-import akka.routing.Router
-import cats.syntax.group
-import iasc.g4.actors.AuctionSpawnerActor.auctionPool
 import iasc.g4.actors.entities.auctionPoolEntity
 
 /**

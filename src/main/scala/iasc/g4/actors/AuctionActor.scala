@@ -53,26 +53,25 @@ private class AuctionActor(
   var highestBidder : String = "http://localhost:8080/subastaGanada?id="
 
   override def onMessage(msg: Command): Behavior[Command] =
-    Behaviors.setup { ctx =>
-      Behaviors.receiveMessage {
-        case StartAuction(auctionId,newAuction,replyTo) =>
-          this.id = auctionId
-          this.price = newAuction.basePrice
-          this.duration = newAuction.duration
-          this.tags = newAuction.tags
-          this.article = newAuction.article
-          ctx.scheduleOnce(this.duration.seconds,ctx.self,EndAuction())
-          replyTo ! "Auction index: "+this.index.toString()+"\nTimeout is "+this.duration.toString()
-          Behaviors.same
-        case MakeBid(newBid,replyTo) =>
-          //TODO: implementar
-          this.price = newBid.price
-          replyTo ! "El nuevo precio es: "+this.price
-          Behaviors.same
-        case EndAuction() =>
-          makeHttpCall(this.highestBidder+this.id);
-          this.auctionSpawner ! FreeAuction(this.id)
-          Behaviors.same
-      }
+    msg match {
+      case StartAuction(auctionId,newAuction,replyTo) =>
+        println(s"Startin auction $index...")
+        this.id = auctionId
+        this.price = newAuction.basePrice
+        this.duration = newAuction.duration
+        this.tags = newAuction.tags
+        this.article = newAuction.article
+        context.scheduleOnce(this.duration.seconds, context.self, EndAuction())
+        replyTo ! "Auction index: "+this.index.toString()+"\nTimeout is "+this.duration.toString()
+        Behaviors.same
+      case MakeBid(newBid,replyTo) =>
+        //TODO: implementar
+        this.price = newBid.price
+        replyTo ! "El nuevo precio es: "+this.price
+        Behaviors.same
+      case EndAuction() =>
+        makeHttpCall(this.highestBidder+this.id);
+        this.auctionSpawner ! FreeAuction(this.id)
+        Behaviors.same
     }
 }
