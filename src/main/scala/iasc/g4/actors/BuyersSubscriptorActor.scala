@@ -18,7 +18,9 @@ object BuyersSubscriptorActor {
 
   var buyersSet = Set[Buyer]()
 
+  final case class GetBuyer(name:String, replyTo: ActorRef[Buyer]) extends BuyersSubscriptorCommand
   final case class GetBuyers(replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
+  final case class GetBuyersByTags(tags: Set[String],replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
   final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
   // instanciación del objeto
@@ -27,13 +29,21 @@ object BuyersSubscriptorActor {
       ctx.log.info("Configurando BuyerSubscriptor")
       ctx.system.receptionist ! Receptionist.Register(BuyersSubscriptorServiceKey, ctx.self)
       Behaviors.receiveMessage {
+        case GetBuyer(name,replyTo)=>
+          var buyer = getBuyer(name)
+          replyTo ! buyer
+          Behaviors.same
+        case GetBuyersByTags(tags, replyTo) =>
+          //TODO implementar la búsqueda por tags
+          replyTo ! Buyers(this.buyersSet)
+          Behaviors.same
         case GetBuyers(replyTo) =>
           println("get buyers...")
-          replyTo ! Buyers(buyersSet)
+          replyTo ! Buyers(this.buyersSet)
           Behaviors.same
         case CreateBuyer(buyer,replyTo) =>
           println("create buyer...")
-          buyersSet+=buyer
+          this.buyersSet+=buyer
           replyTo ! "Buyer creado"
           Behaviors.same
         case _ =>
@@ -41,4 +51,10 @@ object BuyersSubscriptorActor {
           Behaviors.same
       }
     }
+
+  def getBuyer(name:String): Buyer ={
+    var buyerSetAux = buyersSet.find(buyer => buyer.name == name)
+    if (buyerSetAux==None) null
+    else buyerSetAux.head
+  }
 }

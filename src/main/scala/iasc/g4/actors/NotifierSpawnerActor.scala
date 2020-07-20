@@ -7,7 +7,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import iasc.g4.models.Models.Command
 import iasc.g4.actors.NotifierActor
 import iasc.g4.models.Models.OperationPerformed
-import iasc.g4.models.Models.Buyers
+import iasc.g4.models.Models.Buyer
 import iasc.g4.models.Models.Auction
 
 import akka.actor.typed.scaladsl.{ Behaviors, Routers }
@@ -26,26 +26,29 @@ object NotifierSpawnerActor {
 
   trait NotifierSpawnerCommand extends Command
 
-  final case class NotifyBuyers(buyersNotified: Buyers, auction: Auction, replyTo: ActorRef[String]) extends NotifierSpawnerCommand
+  final case class NotifyNewAuction(buyersNotified: Set[Buyer], auction: Auction) extends NotifierSpawnerCommand
 
   val NotifierSpawnerServiceKey = ServiceKey[NotifierSpawnerCommand]("NotifierSpawner")
 
   def apply(): Behavior[Command] =
     Behaviors.setup { ctx =>
-      ctx.log.info("Configurando BuyerSubscriptor")
+      ctx.log.info("Configurando NotifierSpawnerActor")
       ctx.system.receptionist ! Receptionist.Register(NotifierSpawnerServiceKey, ctx.self)
 
       val pool = Routers.pool(poolSize = 5)(
-        Behaviors.supervise(NotifierActor()).onFailure[Exception](SupervisorStrategy.restart))
+        Behaviors.supervise(NotifierActor()).onFailure[Exception](SupervisorStrategy.restart)
+      )
       val router = ctx.spawn(pool, "notifier-pool")
 
       Behaviors.receiveMessage {
-        case NotifyBuyers(buyersNotified, auction, replyTo) =>
-          for (buyer <- buyersNotified.buyers){
-            router ! NotifierActor.Notification(buyer, auction, replyTo)
-          }
+        case NotifyNewAuction(buyersNotified, auction) =>
 
-          replyTo ! "Listo!"
+          printf("***************************************************************************************************************** Numero {}", buyersNotified.size)
+
+
+          for (buyer <- buyersNotified){
+            router ! NotifierActor.NewAuction(buyer, auction)
+          }
           Behaviors.same
       }
     }

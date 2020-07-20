@@ -22,23 +22,26 @@ import scala.util.{ Failure, Success }
  * Actor que se encarga de enviar un mensaje de notificación a una lista de destinatarios
  */
 object NotifierActor {
-  final case class Notification(buyer: Buyer, auction:Auction,  replyTo: ActorRef[String])  extends Command
+  final case class NewAuction(buyer: Buyer, auction:Auction)  extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.log.info("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ start! ")
 
     Behaviors.receiveMessage {
-      case Notification(buyer, auction, replyTo) =>
-        context.log.info("*********************************************************************************************************************************************** Numero {}", buyer)
+      case NewAuction(buyer, auction) =>
+        printf("*********************************************************************************************************************************************** Numero {}", buyer)
 
         implicit val system = ActorSystem()
         implicit val materializer = ActorMaterializer()
         implicit val executionContext = system.dispatcher
 
-        val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = buyer.ip + "/newAuction/1"))
+        val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = buyer.ip + "/buyers"))
+
+        println("\n\n\n\n\n\n\n\n buyers")
+
         responseFuture
           .onComplete {
-            case Success(res) => OperationPerformed("TBD")
+            case Success(res) => println("\n\n\n\n\n\n\n\nASDF SE COMUNICA BIEN")
             case Failure(_)   => sys.error("----------------------------------------------------------------------------------------------------------------something wrong")
           }
         Behaviors.same

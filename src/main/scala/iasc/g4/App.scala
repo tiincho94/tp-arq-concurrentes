@@ -1,57 +1,33 @@
 package iasc.g4
 
-import akka.NotUsed
-import akka.actor.IllegalActorStateException
-import akka.actor.typed.{ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import akka.cluster.MemberStatus
+import akka.actor.typed.{ActorSystem, Behavior}
+import akka.cluster.typed.Cluster
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
-
-import scala.io.StdIn
+import com.typesafe.config.ConfigFactory
 import iasc.g4.actors._
 import iasc.g4.routes.Routes
-import akka.cluster.typed.Cluster
-import com.typesafe.config.ConfigFactory
-import akka.actor.typed.scaladsl.adapter._
 
-import scala.concurrent.duration._
+import scala.io.StdIn
 
+/**
+ * Singleton principal del sistema
+ */
 object App{
 
   /**
-   * start http server
-   * @param routes
-   * @param system
+   * Comportamiento base del sistema
    */
-  private def startHttpServer(routes: Route, system: ActorSystem[_]): Unit = {
-    // Akka HTTP still needs a classic ActorSystem to start
-    println(s"SERVER STARTS2")
-    implicit val classicSystem: akka.actor.ActorSystem = system.classicSystem
-    import system.executionContext
-
-    val port = system.settings.config.getInt("akka.server.port")
-    val futureBinding = Http().bindAndHandle(routes, "localhost", port)
-    println(s"Server online at http://localhost:$port/\nPress RETURN to stop...")
-    StdIn.readLine() // let it run until user presses return
-    futureBinding
-      .flatMap(_.unbind()) // trigger unbinding from the port
-      .onComplete(_ => system.terminate()) // and shutdown when done
-  }
-  // definir comportamiento base del sistema (Esto definiría el actor SystemSupervisor)
   object RootBehavior {
     def apply(): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
       val cluster = Cluster(context.system)
       println(cluster.selfMember)
 
       if (cluster.selfMember.hasRole("seed")) {
-        val workersPerNode =
-          context.system.settings.config.getInt("transformation.workers-per-node")
-        (1 to workersPerNode).foreach { n =>
-          context.spawn(Worker(), s"Worker$n")
-        }
+        // empty
       } else if (cluster.selfMember.hasRole("notifier-spawner")) {
-        context.spawn(NotifierSpawnerActor(), "NotifierSpanwerActor")
+        context.spawn(NotifierSpawnerActor(), "NotifierSpawner")
 
       } else if (cluster.selfMember.hasRole("auction-spawner")) {
         context.spawn(AuctionSpawnerActor(), "AuctionSpawner")
@@ -60,18 +36,18 @@ object App{
         context.spawn(BuyersSubscriptorActor(), "BuyerSubscriptor")
 
       } else if (cluster.selfMember.hasRole("http-server")) {
-        context.system.scheduler.scheduleAtFixedRate(0.seconds, 2.seconds)(()=> {
-          println("Miembros cluster:" + cluster.state.getMembers)
-        })(context.executionContext)
         startHttpServer(new Routes(context).routes(), context.system)
       } else {
         throw new IllegalArgumentException(s"Role no encontrado: $cluster.selfMember.roles.head")
       }
       Behaviors.empty
     }
-    }
+  }
 
-
+  /**
+   * Inicio de la app
+   * @param args parámetros de inicio de la app
+   */
   def main(args: Array[String]): Unit = {
     if (args.isEmpty) {
       startup("seed", 25251)
@@ -89,8 +65,12 @@ object App{
     }
   }
 
+  /**
+   * Inicio de una nueva instancia
+   * @param role rol que va a tomar la nueva instancia
+   * @param port puerto donde estará disponible
+   */
   def startup(role: String, port: Int): Unit = {
-    // Override the configuration of the port and role
     println(s"Role: $role escuchando en $port")
     val config = ConfigFactory
       .parseString(s"""
@@ -100,5 +80,22 @@ object App{
       .withFallback(ConfigFactory.load("transformation"))
 
     ActorSystem[Nothing](RootBehavior(), "TP" , config)
+  }
+
+  /**
+   * Iniciar http server
+   * @param routes rutas http
+   * @param system actor system
+   */
+  private def startHttpServer(routes: Route, system: ActorSystem[_]): Unit = {
+    implicit val classicSystem: akka.actor.ActorSystem = system.classicSystem
+    import system.executionContext
+    val port = system.settings.config.getInt("akka.server.port")
+    val futureBinding = Http().bindAndHandle(routes, "localhost", port)
+    println(s"Server online at http://localhost:$port/\nPress RETURN to stop...")
+    StdIn.readLine() // let it run until user presses return
+    futureBinding
+      .flatMap(_.unbind()) // trigger unbinding from the port
+      .onComplete(_ => system.terminate()) // and shutdown when done
   }
 }
