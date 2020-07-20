@@ -1,13 +1,13 @@
 package iasc.g4.routes
 
 import akka.actor.typed.scaladsl.AskPattern._
-import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.actor.typed.scaladsl.ActorContext
 import akka.event.Logging
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
-import akka.util.Timeout
-import iasc.g4.actors.AuctionSpawnerActor.{Event, GetAuctions}
+import iasc.g4.actors.BuyersSubscriptorActor
+import iasc.g4.actors.NotifierSpawnerActor
 import iasc.g4.actors.BuyersSubscriptorActor.{CreateBuyer, GetBuyers}
 import iasc.g4.actors.NotifierSpawnerActor.{NotifyBuyers}
 import iasc.g4.models.Models.Command
@@ -17,16 +17,13 @@ import scala.concurrent._
 
 /**
  * Definición de rutas de la API HTTP con su vinculación a los diferentes actores
- * @param userSubscriber
- * @param auctionSpawner
- * @param notifierSpawner
  */
-class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event], notifierSpawner: ActorRef[Command])(implicit val system: ActorSystem[_]) {
+class Routes(context: ActorContext[_]) {
 
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+  import iasc.g4.util.Util._
   import iasc.g4.models.Models._
-  // If ask takes more time than this to complete the request is failed
-  private implicit val timeout = Timeout.create(system.settings.config.getDuration("akka.server.routes.ask-timeout"))
+  private implicit val timeout = getTimeout(context)
 
   /**
    * Route definitions for application
@@ -34,11 +31,19 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event],
   object BuyersRoutes {
 
     def getBuyers(): Future[Buyers] = {
-      userSubscriber.ask(GetBuyers)
+      getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
+        if (!actors.isEmpty) {
+          actors.head.ask(GetBuyers)(timeout, context.system.scheduler)
+        } else {
+          Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
+        }
+      )
     }
 
     def createBuyer(newBuyer: Buyer): Future[String] = {
-      userSubscriber.ask(CreateBuyer(newBuyer,_))
+      getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
+        actors.head.ask(CreateBuyer(newBuyer,_))(timeout, context.system.scheduler)
+      )
     }
 
     val routes: Route = pathPrefix("buyers") {
@@ -59,31 +64,10 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event],
     }
   }
 
-  object NotifierRoutes {
-
-    def notify(buyers: Buyers): Future[String] = {
-      notifierSpawner.ask(NotifyBuyers(buyers,_))
-    }
-
-    val routes: Route = pathPrefix("notify") {
-      concat(
-        pathEnd(
-          concat(
-            post {
-              entity(as[Buyers]) { buyers =>
-                complete(StatusCodes.Created, notify(buyers))
-              }
-            }
-          )
-        )
-      )
-
-  }
-  }
-
   object AuctionRoutes {
     def getAuctions: Future[Auctions] = {
-      auctionSpawner.ask(GetAuctions)
+      // TODO completar
+      Future.successful(Auctions(Set.empty))
     }
     def getAuction(id: String): Option[Auction] = {
       // TODO integrar con actor
@@ -133,13 +117,13 @@ class Routes(userSubscriber: ActorRef[Command], auctionSpawner: ActorRef[Event],
 
     val customHandler: ExceptionHandler = ExceptionHandler {
       case ex: Exception =>
-        system.log.error("Unhandled error :(:", ex)
+        context.system.log.error("Unhandled error :(:", ex)
         complete(StatusCodes.InternalServerError, s"General error: ${ex.getMessage}")
     }
 
     handleExceptions(customHandler) {
       logRequestResult(("HTTP Request Result", Logging.InfoLevel)) {
-        concat(AuctionRoutes.routes, BuyersRoutes.routes, NotifierRoutes.routes)
+        concat(AuctionRoutes.routes, BuyersRoutes.routes)
       }
     }
   }
