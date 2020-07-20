@@ -13,6 +13,26 @@
         <appender-ref ref="STDOUT" />
     </appender>
 
+    <logger name="akka.cluster.sbr.SplitBrainResolver" level="ERROR">
+        <appender-ref ref="ASYNC"/>
+    </logger>
+
+    <logger name="akka.cluster.Cluster" level="ERROR">
+        <appender-ref ref="ASYNC"/>
+    </logger>
+
+    <logger name="akka.cluster.ClusterGossip" level="ERROR">
+        <appender-ref ref="ASYNC"/>
+    </logger>
+
+    <logger name="akka.event.slf4j.Slf4jLogger" level="ERROR">
+        <appender-ref ref="ASYNC"/>
+    </logger>
+
+    <logger name="akka.remote.artery.tcp.ArteryTcpTransport" level="ERROR">
+        <appender-ref ref="ASYNC"/>
+    </logger>
+
     <root level="INFO">
         <appender-ref ref="ASYNC"/>
     </root>

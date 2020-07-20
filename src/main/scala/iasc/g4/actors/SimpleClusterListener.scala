@@ -24,18 +24,12 @@ object SimpleClusterListener {
           message match {
             case MemberUp(member) =>
               context.log.info("Member is TINWOW Up: {}", member.address)
-              println("Member is TINWOW Up: {}", member.address)
               Behaviors.same
             case UnreachableMember(member) =>
               context.log.info("Member detected TINWOW as unreachable: {}", member)
-              println("Member detected TINWOW as unreachable: {}", member)
               Behaviors.same
             case MemberRemoved(member, previousStatus) =>
               context.log.info(
-                "Member is TINWOW Removed: {} after {}",
-                member.address, previousStatus)
-
-              println(
                 "Member is TINWOW Removed: {} after {}",
                 member.address, previousStatus)
               Behaviors.same
