@@ -30,15 +30,12 @@ import iasc.g4.util.Util._
  * Actor que maneja una subasta
  */
 object AuctionActor {
-  // para definir "variables de clase"
-  final case class TransformText(text: String, replyTo: ActorRef[TextTransformed]) extends Command
-  final case class TextTransformed(text: String) extends CborSerializable
   final case class StartAuction(auctionId:String, newAuction: Auction, replyTo: ActorRef[String]) extends Command
   final case class MakeBid(newBid:Bid, replyTo: ActorRef[String]) extends Command
   final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction() extends Command
 
-  def apply(index:Long,auctionSpawner:ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]): Behavior[Command] =
+  def apply(index: Long, auctionSpawner: ActorRef[Command]): Behavior[Command] =
     Behaviors.setup(ctx => new AuctionActor(ctx,index,auctionSpawner))
 }
 
@@ -57,13 +54,7 @@ private class AuctionActor(
 
   override def onMessage(msg: Command): Behavior[Command] =
     Behaviors.setup { ctx =>
-      // each worker registers themselves with the receptionist
-      // printf("Registering myself with receptionist")
-      // ctx.system.receptionist ! Receptionist.Register(AuctionActorServiceKey, ctx.self)
       Behaviors.receiveMessage {
-        case TransformText(text, replyTo) =>
-          replyTo ! TextTransformed(text.toUpperCase)
-          Behaviors.same
         case StartAuction(auctionId,newAuction,replyTo) =>
           this.id = auctionId
           this.price = newAuction.basePrice
