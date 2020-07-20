@@ -20,6 +20,7 @@ object BuyersSubscriptorActor {
 
   final case class GetBuyer(name:String, replyTo: ActorRef[Buyer]) extends BuyersSubscriptorCommand
   final case class GetBuyers(replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
+  final case class GetBuyersByTags(tags: Set[String],replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
   final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
   // instanciación del objeto
@@ -31,6 +32,10 @@ object BuyersSubscriptorActor {
         case GetBuyer(name,replyTo)=>
           var buyer = getBuyer(name)
           replyTo ! buyer
+          Behaviors.same
+        case GetBuyersByTags(tags, replyTo) =>
+          //TODO implementar la búsqueda por tags
+          replyTo ! Buyers(this.buyersSet)
           Behaviors.same
         case GetBuyers(replyTo) =>
           println("get buyers...")

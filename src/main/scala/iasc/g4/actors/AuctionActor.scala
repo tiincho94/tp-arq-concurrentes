@@ -1,30 +1,22 @@
 package iasc.g4.actors
 
-import scala.util.{Failure, Success}
-import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
-import akka.actor.typed.receptionist.Receptionist
-import akka.actor.typed.receptionist.ServiceKey
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
-import iasc.g4.actors.BuyersSubscriptorActor.GetBuyers
-import iasc.g4.models.Models.{Auction, Bid, Buyers, Command, OperationPerformed}
-import iasc.g4.util.Util.{getActors, getTimeout}
-
-import scala.concurrent.duration._
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.{ActorSystem, Cancellable}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
-import akka.stream.ActorMaterializer
-import cats.Inject
-import iasc.g4.CborSerializable
+import akka.actor.typed.scaladsl.{AbstractBehavior, Behaviors}
 import iasc.g4.actors.AuctionActor._
-import iasc.g4.actors.AuctionSpawnerActor.{AuctionSpawnerCommand, Event, FreeAuction}
+import iasc.g4.actors.AuctionSpawnerActor.FreeAuction
+import iasc.g4.models.Models.{Auction, Bid, Buyer, Buyers, Command, OperationPerformed}
+import iasc.g4.util.Util.{getActors, _}
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.Future
-import iasc.g4.util.Util._
+import scala.concurrent.duration._
+import akka.actor.typed.ActorRef
+import akka.actor.typed.scaladsl.ActorContext
+import akka.actor.typed.scaladsl.AskPattern._
+import iasc.g4.actors.BuyersSubscriptorActor.{GetBuyer, GetBuyers}
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
+
 
 /**
  * Actor que maneja una subasta
@@ -50,28 +42,61 @@ private class AuctionActor(
   var duration : Long = 0
   var tags = Set[String]()
   var article : String = ""
-  var highestBidder : String = "http://localhost:8080/subastaGanada?id="
+  var currentWinner: Buyer = null
+  var buyers = Set[Buyer]()
 
   override def onMessage(msg: Command): Behavior[Command] =
     msg match {
       case StartAuction(auctionId,newAuction,replyTo) =>
-        println(s"Startin auction $index...")
         this.id = auctionId
         this.price = newAuction.basePrice
         this.duration = newAuction.duration
         this.tags = newAuction.tags
         this.article = newAuction.article
         context.scheduleOnce(this.duration.seconds, context.self, EndAuction())
-        replyTo ! "Auction index: "+this.index.toString()+"\nTimeout is "+this.duration.toString()
+        replyTo ! "Auction index: " + this.index.toString() + "\nTimeout is " + this.duration.toString()
         Behaviors.same
       case MakeBid(newBid,replyTo) =>
-        //TODO: implementar
-        this.price = newBid.price
-        replyTo ! "El nuevo precio es: "+this.price
+        updateWinner(newBid.buyerName)
+        if (newBid.price > this.price) {
+          this.price = newBid.price
+          replyTo ! "El nuevo precio es: $"+this.price+" y el ganador actual es "+newBid.buyerName
+        } else {
+          replyTo ! "El precio enviado no puede ser menor que el establecido"
+        }
         Behaviors.same
       case EndAuction() =>
-        makeHttpCall(this.highestBidder+this.id);
+        this.currentWinner match {
+          case null => {}
+          case _ => makeHttpCall(this.currentWinner.ip+"?id="+this.id);
+        }
         this.auctionSpawner ! FreeAuction(this.id)
         Behaviors.same
+    }
+
+    def updateWinner(buyerName : String):Unit = {
+      this.buyers.find(localBuyer => localBuyer.name == buyerName) match {
+        case Some(localBuyer) =>
+          this.currentWinner=localBuyer
+        case None => {
+          getBuyer(buyerName).onComplete {
+            case Success(remoteBuyer) => {
+              this.buyers += remoteBuyer
+              this.currentWinner = remoteBuyer
+            }
+            case Failure(_) => throw new IllegalArgumentException("Buyer no encontrado")
+          }
+        }
+      }
+    }
+
+    def getBuyer(name:String): Future[Buyer] = {
+      getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
+        if (!actors.isEmpty) {
+          actors.head.ask(GetBuyer(name,_))(getTimeout(context), context.system.scheduler)
+        } else {
+          Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
+        }
+      )
     }
 }
