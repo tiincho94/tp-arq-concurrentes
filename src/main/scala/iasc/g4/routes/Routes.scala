@@ -30,10 +30,10 @@ class Routes(context: ActorContext[_]) {
    */
   object BuyersRoutes {
 
-    def getBuyers(): Future[Buyers] = {
+    def getBuyers(tags: Set[String]): Future[Buyers] = {
       getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
         if (!actors.isEmpty) {
-          actors.head.ask(GetBuyers)(timeout, context.system.scheduler)
+          actors.head.ask(GetBuyers(tags, _))(timeout, context.system.scheduler)
         } else {
           Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
         }
@@ -51,7 +51,9 @@ class Routes(context: ActorContext[_]) {
         pathEnd(
           concat(
             get {
-              complete(getBuyers())
+              parameters("tags".as[String].*) { tags =>
+                complete(getBuyers(tags.toSet))
+              }
             },
             post {
               entity(as[Buyer]) { newBuyer =>

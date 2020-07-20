@@ -19,8 +19,7 @@ object BuyersSubscriptorActor {
   var buyersSet = Set[Buyer]()
 
   final case class GetBuyer(name:String, replyTo: ActorRef[Buyer]) extends BuyersSubscriptorCommand
-  final case class GetBuyers(replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
-  final case class GetBuyersByTags(tags: Set[String],replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
+  final case class GetBuyers(tags: Set[String] = Set(), replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
   final case class CreateBuyer(buyer:Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
   // instanciación del objeto
@@ -30,16 +29,17 @@ object BuyersSubscriptorActor {
       ctx.system.receptionist ! Receptionist.Register(BuyersSubscriptorServiceKey, ctx.self)
       Behaviors.receiveMessage {
         case GetBuyer(name,replyTo)=>
-          var buyer = getBuyer(name)
-          replyTo ! buyer
+          buyersSet.find(buyer => buyer.name == name) match {
+            case Some(buyer) => replyTo ! buyer
+            case None => throw new IllegalArgumentException(s"buyer no encontrado $name")
+          }
           Behaviors.same
-        case GetBuyersByTags(tags, replyTo) =>
-          //TODO implementar la búsqueda por tags
-          replyTo ! Buyers(this.buyersSet)
-          Behaviors.same
-        case GetBuyers(replyTo) =>
-          println("get buyers...")
-          replyTo ! Buyers(this.buyersSet)
+        case GetBuyers(tags, replyTo) =>
+          if (tags.isEmpty) {
+            replyTo ! Buyers(this.buyersSet)
+          } else {
+            replyTo ! filterBuyers(tags)
+          }
           Behaviors.same
         case CreateBuyer(buyer,replyTo) =>
           println("create buyer...")
@@ -52,9 +52,19 @@ object BuyersSubscriptorActor {
       }
     }
 
-  def getBuyer(name:String): Buyer ={
-    var buyerSetAux = buyersSet.find(buyer => buyer.name == name)
-    if (buyerSetAux==None) null
-    else buyerSetAux.head
+  /**
+   * @param tags
+   * @return buyers que tengan cualquiera de los tags provistos
+   */
+  def filterBuyers(tags: Set[String]): Buyers = {
+    var buyers = Set[Buyer]()
+    this.buyersSet.foreach(buyer => {
+      for (tag <- tags) {
+        if (buyer.tags.contains(tag)) {
+          buyers += buyer
+        }
+      }
+    })
+    Buyers(buyers)
   }
 }
