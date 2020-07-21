@@ -5,11 +5,13 @@ import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.ActorContext
+import akka.http.impl.util.Util
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import iasc.g4.models.Models.OperationPerformed
+
 import scala.concurrent._
 import scala.util.{Failure, Success}
 
@@ -17,6 +19,10 @@ import scala.util.{Failure, Success}
  * Utilidades
  */
 object Util {
+
+  implicit val clientSystem = ActorSystem()
+  implicit val materializer = ActorMaterializer()
+  implicit val executionContext = clientSystem.dispatcher
 
   /**
    * @param ctx
@@ -53,14 +59,11 @@ object Util {
   }
 
   def makeHttpCall(_uri : String):Unit = {
-    implicit val system = ActorSystem()
-    implicit val materializer = ActorMaterializer()
-    implicit val executionContext = system.dispatcher
-    val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = _uri))
+    val responseFuture: Future[HttpResponse] = Http(clientSystem).singleRequest(HttpRequest(uri = _uri))
     responseFuture
       .onComplete {
         case Success(_) => OperationPerformed("Http call ok")
-        case Failure(err) => system.log.error(err,"Error haciendo http call")
+        case Failure(err) => clientSystem.log.error(err,"Error haciendo http call")
       }
   }
 

@@ -21,23 +21,23 @@ object NotifierActor {
     Behaviors.setup { ctx =>
       Behaviors.receiveMessage {
         case NewAuction(buyer, auction) =>
-          ctx.log.info(s"Avisando de nueva auction a buyer ${buyer.name}")
+          ctx.log.info(s"Avisando de nueva auction a buyer ${buyer.name}, ip: ${buyer.ip}")
           makeHttpCall(s"http://${buyer.ip}/nuevaSubasta?id=${auction.id}");
           Behaviors.same
         case Winner(buyer, auction) =>
-          ctx.log.info(s"Avisando a ganador ${buyer.name} de auction ${auction.id}")
+          ctx.log.info(s"Avisando a ganador ${buyer.name} de auction ${auction.id}, ip: ${buyer.ip}")
           makeHttpCall(s"http://${buyer.ip}/subastaGanada?id=${auction.id}")
           Behaviors.same
         case Looser(buyer, auction) =>
-          ctx.log.info(s"Avisando a looser ${buyer.name}")
+          ctx.log.info(s"Avisando a looser ${buyer.name}, ip: ${buyer.ip}")
           makeHttpCall(s"http://${buyer.ip}/subastaPerdida?id=${auction.id}")
           Behaviors.same
         case NewPrice(buyer, newPrice, auction) =>
-          ctx.log.info(s"Avisando nuevo precio a ${buyer.name}")
+          ctx.log.info(s"Avisando nuevo precio a ${buyer.name}, ip: ${buyer.ip}")
           makeHttpCall(s"http://${buyer.ip}/nuevoPrecio?id=${auction.id}&precio=$newPrice")
           Behaviors.same
         case Cancellation(buyer, auction) =>
-          ctx.log.info(s"Avisando de cancelación a ${buyer.name}")
+          ctx.log.info(s"Avisando de cancelación a ${buyer.name}, ip: ${buyer.ip}")
           makeHttpCall(s"http://${buyer.ip}/subastaCancelada?id=${auction.id}")
           Behaviors.same
       }
