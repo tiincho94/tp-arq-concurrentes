@@ -88,8 +88,10 @@ private class AuctionActor(
         freeAuction(this.id)
         Behaviors.same
       case DeleteAuction(replyTo) =>
+        printf("\n\n\nCancelando subasta")
         this.timeout.cancel()
         selfNotifyCancelledAuction()
+        freeAuction(this.id)
         Behaviors.same
     }
 
