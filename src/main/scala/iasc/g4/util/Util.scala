@@ -10,7 +10,6 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import iasc.g4.models.Models.OperationPerformed
-import sttp.client._
 import scala.concurrent._
 import scala.util.{Failure, Success}
 
