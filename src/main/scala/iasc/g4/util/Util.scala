@@ -40,7 +40,7 @@ object Util {
     )(ctx.executionContext)
   }
 
-  def makeHttpCall(_uri : String):Unit = {
+  def makeHttpCall(_uri : String): Unit = {
     implicit val system = ActorSystem()
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
