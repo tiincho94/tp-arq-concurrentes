@@ -15,7 +15,7 @@ import akka.actor.typed.receptionist.ServiceKey
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.AskPattern._
 import iasc.g4.actors.BuyersSubscriptorActor.{GetBuyer, GetBuyers}
-import iasc.g4.actors.NotifierSpawnerActor.{NotifierSpawnerCommand, NotifyNewAuction}
+import iasc.g4.actors.NotifierSpawnerActor.{NotifierSpawnerCommand, NotifyCancellation, NotifyLosers, NotifyNewAuction, NotifyNewAuction2, NotifyNewPrice, NotifyWinner}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
@@ -46,8 +46,8 @@ private class AuctionActor(
   var duration : Long = 0
   var tags = Set[String]()
   var article : String = ""
-  var currentWinner: Buyer = null
-  var buyers = Set[Buyer]()
+  var currentWinner: String = null
+  var buyers = Set[String]()
   var auction: Auction = null
   var timeout: Cancellable = null
 
@@ -94,74 +94,29 @@ private class AuctionActor(
     }
 
     def updateWinner(buyerName : String):Unit = {
-      this.buyers.find(localBuyer => localBuyer.name == buyerName) match {
-        case Some(localBuyer) =>
-          this.currentWinner=localBuyer
-        case None => {
-          getBuyer(buyerName).onComplete {
-            case Success(remoteBuyer) => {
-              this.buyers += remoteBuyer
-              this.currentWinner = remoteBuyer
-            }
-            case Failure(_) => throw new IllegalArgumentException("Buyer no encontrado")
-          }
-        }
-      }
+      this.currentWinner = buyerName
+      this.buyers += buyerName
     }
 
-  def getBuyers(): Future[Buyers] = {
-    getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
-      if (!actors.isEmpty) {
-        actors.head.ask(GetBuyers(this.auction.tags,_))(getTimeout(context), context.system.scheduler)
-      } else {
-        Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
-      }
-    )
-  }
-
-  def getBuyer(name:String): Future[Buyer] = {
-      getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
-        if (!actors.isEmpty) {
-          actors.head.ask(GetBuyer(name,_))(getTimeout(context), context.system.scheduler)
-        } else {
-          Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
-        }
-      )
-  }
-
   def selfNotifyWinner() = {
-    makeHttpCall(s"http://${this.currentWinner.ip}/subastaGanada?id=${this.id}")
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyWinner(auction, currentWinner)
   }
 
-  def selfNotifyLosers(currentWinner:Buyer) = {
-    this.buyers.foreach(
-      buyer =>
-        if(!buyer.equals(currentWinner)) {
-          makeHttpCall(s"http://${buyer.ip}/subastaPerdida?id=${this.auction.id}")
-        }
-    )
+  def selfNotifyLosers(currentWinner : String) = {
+    val losers = buyers.filter(b => !b.equals(currentWinner))
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyLosers(auction, losers)
   }
 
   def selfNotifyCancelledAuction() = {
-    this.buyers.foreach(
-      buyer => makeHttpCall(s"http://${buyer.ip}/subastaCancelada?id=${this.auction.id}")
-    )
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyCancellation(auction, buyers)
   }
 
   def selfNotifyNewPrice(newPrice:Double) = {
-    this.buyers.foreach(
-      buyer => makeHttpCall(s"http://${buyer.ip}/nuevoPrecio?id=${this.auction.id}&precio=${newPrice}")
-    )
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewPrice(auction, buyers, newPrice)
   }
 
   def selfNotifyNewAuction(auctionId:String) = {
-    val spawner = getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey)
-    getBuyers().onComplete {
-      case Success(remoteBuyers) => {
-        spawner ! NotifyNewAuction(remoteBuyers.buyers, this.auction)
-      }
-      case Failure(_) => {this.context.log.error("Imposible obtener buyers")}
-    }
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewAuction2(auction)
   }
 
   def freeAuction(auctionId:String) = {
