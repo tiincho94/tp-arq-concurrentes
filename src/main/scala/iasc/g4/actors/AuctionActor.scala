@@ -89,6 +89,7 @@ private class AuctionActor(
         this.timeout.cancel()
         selfNotifyCancelledAuction()
         freeAuction(this.id)
+        replyTo ! s"Subasta ${this.auction.id} cancelada"
         Behaviors.same
     }
 

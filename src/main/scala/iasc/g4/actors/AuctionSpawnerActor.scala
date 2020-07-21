@@ -55,7 +55,6 @@ object AuctionSpawnerActor {
         //replyTo ! Auctions(auctions)
         Behaviors.same
       case DeleteAuction(auctionId, replyTo) =>
-        printf("Cancelando subasta")
         var auctionActor = auctionPoolEntity.getAuctionById(auctionId)
         if(auctionActor!=None)
           auctionActor.head.getAuction() ! AuctionActor.DeleteAuction(replyTo)
