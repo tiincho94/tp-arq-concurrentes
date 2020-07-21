@@ -142,23 +142,12 @@ private class AuctionActor(
   }
 
   def selfNotifyNewAuction(auctionId:String) = {
-    getActors(context, NotifierSpawnerActor.NotifierSpawnerServiceKey).onComplete {
-      case Success(actors) => {
-        if (!actors.isEmpty) {
-          getBuyers().onComplete {
-            case Success(remoteBuyers) => {
-              remoteBuyers.buyers.foreach(
-                buyer => makeHttpCall(s"http://${buyer.ip}/nuevaSubasta?id=${auctionId}")
-              )
-            }
-            case Failure(_) => {this.context.log.error("Imposible obtener buyers")}
-          }
-          //actors.head ! NotifyNewAuction(this.buyers, this.auction)
-        } else {
-          throw new IllegalStateException("NotifierSpawner no disponible")
-        }
+    val spawner = getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey)
+    getBuyers().onComplete {
+      case Success(remoteBuyers) => {
+        spawner ! NotifyNewAuction(remoteBuyers.buyers, this.auction)
       }
-      case Failure(_) => throw new IllegalStateException("NotifierSpawner no disponible")
+      case Failure(_) => {this.context.log.error("Imposible obtener buyers")}
     }
   }
 
