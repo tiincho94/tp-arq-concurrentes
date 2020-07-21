@@ -26,17 +26,14 @@ import iasc.g4.tester.dto.Buyer;
 public class AuctionService implements ApplicationListener<ServletWebServerInitializedEvent> {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AuctionService.class);
-
 	private static final Random RND = new Random();
-	
-	private static final int MAX_BID_INCREASE = 10;
 	
 	private RestTemplate client;
 	
 	@Value("${auction.server:http://localhost:8081}")
 	private String serverHost;
 	
-	@Value("${client.name:}")
+	@Value("${client.name}")
 	private String name;
 
 	private String ip;
@@ -47,6 +44,9 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	private List<String> tags;
 	
 	private final Map<String, Double> auctions;
+	
+	@Value("${client.bid.max-increase:10.0}")
+	private Double maxBidIncrase;
 	
 	/**
 	 * @throws UnknownHostException
@@ -65,7 +65,7 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 			LOG.debug("Error obteniendo ip...", e);
 			this.ip = "localhost:" + this.port;
 		}
-		if (null == this.name || this.name.isEmpty()) {
+		if (null == this.name || this.name.isEmpty() || this.name.equals("default")) {
 			this.name = "cliente:" + ip;
 		}
 		registerWithServer();
@@ -85,7 +85,7 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	 * @param newPrice
 	 */
 	public void updatePrice(String auctionId, Double newPrice) {
-		auctions.replace(auctionId, newPrice);
+		updateAuctionPrice(auctionId, newPrice);
 	}
 	
 	/**
@@ -101,9 +101,7 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	 */
 	@Scheduled(fixedRateString ="${client.bid.delay:5000}", initialDelay=5000)
 	public void bidAll() {
-		auctions.forEach( (auctionId, lastPrice) -> {
-			bid(auctionId, lastPrice + RND.nextInt(MAX_BID_INCREASE));
-		});
+		auctions.forEach((auctionId, lastPrice) -> bid(auctionId, lastPrice + RND.nextDouble() * getMaxBidIncrase()));
 	}
 	
 	/**
@@ -112,43 +110,45 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	 * @param amount
 	 */
 	private void bid(String auctionId, double amount) {
-		LOG.info("Enviando bid a {} de {}", auctionId, amount);
+		LOG.info("{}: Enviando bid a {} de {}", name, auctionId, amount);
 		HttpEntity<Bid> req = new HttpEntity<>(new Bid(auctionId, name, amount));
 		ResponseEntity<String> r = client.exchange(serverHost + "/bids", HttpMethod.PUT, req, String.class);
-		LOG.info("Resultado de bid a {}: {}", auctionId, r.getBody());
-		auctions.replace(auctionId, amount);
+		LOG.info("{}: Resultado de bid a {}: {}", name, auctionId, r.getBody());
+		updateAuctionPrice(auctionId, amount);
 	}
 
+	/**
+	 * update an auction price
+	 * @param auctionId
+	 * @param amount
+	 */
+	private synchronized void updateAuctionPrice(String auctionId, double amount) {
+		if (auctions.containsKey(auctionId)) auctions.replace(auctionId, amount);
+	}
+	
 	/**
 	 * register with server
 	 */
 	private void registerWithServer() {
 		ResponseEntity<String> r = client.postForEntity(serverHost + "/buyers", new Buyer(name, ip, tags), String.class);
 		if (r.getBody().toLowerCase().contains("creado")) {
-			LOG.info("Registrado como {} en server: {}", name, serverHost);
+			LOG.info("{}: Registrado como {} en server: {}", name, name, serverHost);
 		} else {
-			throw new IllegalStateException("Error registrando en server: " + serverHost);
+			throw new IllegalStateException(name + ": Error registrando en server: " + serverHost);
 		}
 	}
 
 	/**
-	 * @return the serverHost
+	 * @return the maxBidIncrase
 	 */
-	public String getServerHost() {
-		return serverHost;
+	public Double getMaxBidIncrase() {
+		return maxBidIncrase;
 	}
 
 	/**
-	 * @return the port
+	 * @return the name
 	 */
-	public Integer getPort() {
-		return port;
-	}
-
-	/**
-	 * @return the auctions
-	 */
-	public Map<String, Double> getAuctions() {
-		return auctions;
+	public String getName() {
+		return name;
 	}
 }

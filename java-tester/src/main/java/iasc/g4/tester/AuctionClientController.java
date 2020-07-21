@@ -19,35 +19,35 @@ public class AuctionClientController {
 
 	@GetMapping("/subastaGanada")
 	public ResponseEntity<String> subastaGanada(@PathParam("id") String id) {
-		LOG.info("Gané la subasta {} :)!", id);
+		LOG.info("{}: Gane la subasta {} :)!", service.getName(), id);
 		service.removeAuction(id);
 		return ResponseEntity.ok().body("Ok!");
 	}
 
 	@GetMapping("/nuevaSubasta")
 	public ResponseEntity<String> nuevaSubasta(@PathParam("id") String id) {
-		LOG.info("Me invitaron a la subasta {} :)", id);
+		LOG.info("{}: Me invitaron a la subasta {} :)", service.getName(), id);
 		service.receiveInvitation(id);
 		return ResponseEntity.ok().body("Ok!");
 	}
 
 	@GetMapping("/subastaPerdida")
 	public ResponseEntity<String> subastaPerdida(@PathParam("id") String id) {
-		LOG.info("Perdí la subasta {} :(", id);
+		LOG.info("{}: Perdi la subasta {} :(", service.getName(), id);
 		service.removeAuction(id);
 		return ResponseEntity.ok().body("Ok!");
 	}
 
 	@GetMapping("/nuevoPrecio")
 	public ResponseEntity<String> subastaPerdida(@PathParam("id") String id, @PathParam("precio") Double precio) {
-		LOG.info("Nuevo precio recibido para subasta {}: {}", id, precio);
+		LOG.info("{}: Nuevo precio recibido para subasta {}: {}", service.getName(), id, precio);
 		service.updatePrice(id, precio);
 		return ResponseEntity.ok().body("Ok!");
 	}
 
 	@GetMapping("/subastaCancelada")
 	public ResponseEntity<String> subastaCancelada(@PathParam("id") String id) {
-		LOG.info("La subasta {} fue cancelada", id);
+		LOG.info("{}: La subasta {} fue cancelada", service.getName(), id);
 		service.removeAuction(id);
 		return ResponseEntity.ok().body("Ok!");
 	}
