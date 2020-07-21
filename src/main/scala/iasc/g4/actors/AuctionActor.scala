@@ -68,9 +68,9 @@ private class AuctionActor(
           updateWinner(newBid.buyerName)
           this.price = newBid.price
           selfNotifyNewPrice(this.price) //TODO
-          replyTo ! "El nuevo precio es: $"+this.price+" y el ganador actual es "+newBid.buyerName
+          replyTo ! s"El nuevo precio es: |${this.price}| y el ganador por el momento es |${newBid.buyerName}|"
         } else {
-          replyTo ! "El precio enviado no puede ser menor que el establecido"
+          replyTo ! s"El precio enviado |${newBid.price}| puede ser menor que el establecido |${this.price}|"
         }
         Behaviors.same
       case EndAuction() =>

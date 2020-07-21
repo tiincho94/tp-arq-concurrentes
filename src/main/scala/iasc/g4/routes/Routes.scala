@@ -95,6 +95,7 @@ class Routes(context: ActorContext[_]) {
         }
       )
     }
+
     def cancelAuction(auctionId: String): Future[String] = Future {
       // TODO integrar con actor
       "Ok!"
