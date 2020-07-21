@@ -43,8 +43,13 @@ object BuyersSubscriptorActor {
           Behaviors.same
         case CreateBuyer(buyer,replyTo) =>
           println("create buyer...")
-          this.buyersSet+=buyer
-          replyTo ! "Buyer creado"
+          this.buyersSet.find(b => b.name.equals(buyer.name)) match {
+            case Some(value) => replyTo ! "Nombre no disponible"
+            case None => {
+              this.buyersSet+=buyer
+              replyTo ! "Buyer creado"
+            }
+          }
           Behaviors.same
         case _ =>
           println("Ignorando mensaje inesperado...")
