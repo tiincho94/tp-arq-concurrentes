@@ -29,6 +29,10 @@
         <appender-ref ref="ASYNC"/>
     </logger>
 
+    <logger name="akka.actor.ActorSystemImpl" level="ERROR">
+        <appender-ref ref="ASYNC"/>
+    </logger>
+
     <logger name="akka.remote.artery.tcp.ArteryTcpTransport" level="ERROR">
         <appender-ref ref="ASYNC"/>
     </logger>

@@ -46,21 +46,24 @@ object NotifierSpawnerActor {
           }
           Behaviors.same
         case NotifyNewPrice(auction, buyers, newPrice) =>
+          val set: Set[Buyer] = getBuyers(ctx,auction).buyers
           buyers.foreach(buyer => {
-            router ! NotifierActor.NewPrice(getBuyer(ctx, buyer), newPrice, auction)
+            router ! NotifierActor.NewPrice(getBuyerFromSet(buyer, set), newPrice, auction)
           })
           Behaviors.same
         case NotifyWinner(auction, winnerName) =>
           router ! NotifierActor.Winner(getBuyer(ctx, winnerName), auction)
           Behaviors.same
         case NotifyLosers(auction, loosers) =>
+          val set: Set[Buyer] = getBuyers(ctx,auction).buyers
           loosers.foreach(looser => {
-            router ! NotifierActor.Looser(getBuyer(ctx, looser), auction)
+            router ! NotifierActor.Looser(getBuyerFromSet(looser, set), auction)
           })
           Behaviors.same
         case NotifyCancellation(auction, buyers) =>
+          val set: Set[Buyer] = getBuyers(ctx,auction).buyers
           buyers.foreach { buyer =>
-            router ! NotifierActor.Cancellation(getBuyer(ctx, buyer), auction)
+            router ! NotifierActor.Cancellation(getBuyerFromSet(buyer, set), auction)
           }
           Behaviors.same
       }
@@ -76,6 +79,13 @@ object NotifierSpawnerActor {
     val actor = getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey)
     val f = actor.ask(GetBuyer(name, _))(getTimeout(ctx), ctx.system.scheduler)
     Await.result(f, getTimeout(ctx).duration)
+  }
+
+  def getBuyerFromSet(buyerName: String, buyers: Set[Buyer]): Buyer ={
+    buyers.find(b => b.name.equals(buyerName)) match {
+      case Some(buyer) => buyer
+      case None => throw new IllegalArgumentException(s"Buyer no disponible $buyerName")
+    }
   }
 }
 

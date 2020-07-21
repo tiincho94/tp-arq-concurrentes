@@ -66,8 +66,11 @@ object AuctionSpawnerActor {
         Behaviors.same
       case MakeBid(auctionId,newBid,replyTo) =>
         var auctionActor = auctionPoolEntity.getAuctionById(auctionId)
-        if(auctionActor!=None)
+        if(auctionActor != None) {
           auctionActor.head.getAuction() ! AuctionActor.MakeBid(newBid,replyTo)
+        } else {
+          replyTo ! s"Subasta no encontrada: ${newBid.auctionId}"
+        }
         Behaviors.same
       case FreeAuction(id) =>
         auctionPoolEntity.freeAuction(id)
