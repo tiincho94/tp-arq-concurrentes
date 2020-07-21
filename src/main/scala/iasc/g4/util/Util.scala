@@ -60,7 +60,7 @@ object Util {
     responseFuture
       .onComplete {
         case Success(_) => OperationPerformed("Http call ok")
-        case Failure(err)   => system.log.error("Error haciendo http call", err)
+        case Failure(err) => system.log.error(err,"Error haciendo http call")
       }
   }
 

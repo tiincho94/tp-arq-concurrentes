@@ -11,12 +11,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ClienteController {
 	
-	@GetMapping("/subastaGanada")	
-	ResponseEntity<?> subastaGanada (
+	@GetMapping("/{message}")	
+	ResponseEntity<?> recibirNotificacion (
 			@PathParam("id") String id
 			) throws Exception{
-				String responseSt = "Gané la subasta "+id;
-				System.out.println(responseSt);
+				System.out.println("Mensaje: " + message "; Subasta: "+ id);
 				HttpHeaders respHeaders = new HttpHeaders();
 				respHeaders.setCacheControl("must-revalidate, post-check=0, pre-check=0");
 				return new ResponseEntity<String>(responseSt, respHeaders, HttpStatus.OK);
