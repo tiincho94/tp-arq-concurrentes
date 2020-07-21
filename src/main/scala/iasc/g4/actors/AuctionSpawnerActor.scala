@@ -38,7 +38,9 @@ object AuctionSpawnerActor {
     ctx.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, ctx.self)
 
     (0 to 3).foreach { n =>
-      val behavior = AuctionActor(n,ctx.self)
+      //val behavior = AuctionActor(n,ctx.self)
+      var auctionActorServiceKey = ServiceKey[Command](s"AuctionActor$n")
+      val behavior = AuctionActor(n,auctionActorServiceKey)
       println(s"Spawning auction $n...")
       val ref : ActorRef[Command] = ctx.spawn(behavior, s"Auction$n")
       println(s"Auction $n ok: $ref")
@@ -57,14 +59,14 @@ object AuctionSpawnerActor {
         replyTo ! OperationPerformed("TBD")
         Behaviors.same
       case CreateAuction(auctionId,newAuction, replyTo) =>
-        var auctionActor = auctionPoolEntity.getFreeAuctionActor(auctionId,replyTo)
+        var auctionActor = auctionPoolEntity.getFreeAuction(auctionId,replyTo).getAuction()
         if(auctionActor!=null)
           auctionActor ! AuctionActor.StartAuction(auctionId,newAuction,replyTo)
         Behaviors.same
       case MakeBid(auctionId,newBid,replyTo) =>
-        var auctionActor = auctionPoolEntity.getAuctionActorById(auctionId)
-        if(auctionActor!=null)
-          auctionActor ! AuctionActor.MakeBid(newBid,replyTo)
+        var auctionActor = auctionPoolEntity.getAuctionById(auctionId)
+        if(auctionActor!=None)
+          auctionActor.head.getAuction() ! AuctionActor.MakeBid(newBid,replyTo)
         Behaviors.same
       case FreeAuction(id) =>
         auctionPoolEntity.freeAuction(id)

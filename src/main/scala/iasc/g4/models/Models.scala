@@ -14,16 +14,16 @@ object Models {
   final case class OperationPerformed(description: String)
   final case class Buyer(name: String, ip: String, tags: Set[String])
   final case class Buyers(buyers: Set[Buyer])
-  final case class Auction(basePrice: Double, duration: Long, tags: Set[String], article: String)
+  final case class Auction(id:String, basePrice: Double, duration: Long, tags: Set[String], article: String)
   final case class Auctions(auctions: Set[Auction])
-  final case class Bid(buyerName : String, price : Double)
+  final case class Bid(auctionId:String, buyerName : String, price : Double)
 
   import DefaultJsonProtocol._
   implicit val buyerJsonFormat: RootJsonFormat[Buyer] = jsonFormat3(Buyer)
   implicit val buyersJsonFormat: RootJsonFormat[Buyers] = jsonFormat1(Buyers)
-  implicit val auctionJsonFormat: RootJsonFormat[Auction] = jsonFormat4(Auction)
+  implicit val auctionJsonFormat: RootJsonFormat[Auction] = jsonFormat5(Auction)
   implicit val auctionsJsonFormat: RootJsonFormat[Auctions] = jsonFormat1(Auctions)
-  implicit val bidJsonFormat: RootJsonFormat[Bid] = jsonFormat2(Bid)
+  implicit val bidJsonFormat: RootJsonFormat[Bid] = jsonFormat3(Bid)
 }
 
 abstract class AuctionInstance() {

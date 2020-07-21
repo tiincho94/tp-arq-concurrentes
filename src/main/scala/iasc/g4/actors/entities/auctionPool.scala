@@ -11,12 +11,8 @@ object auctionPoolEntity{
     this.auctionPool = auctionPool
   }
 
-  def getAuctionActorById(id:String) : ActorRef[Command] = {
-    var auctionAux = this.auctionPool.find(a => a.getId()==id)
-    if (auctionAux==None)
-      return null
-    else
-      return auctionAux.head.getAuction()
+  def getAuctionById(id:String) : Option[AuctionInstance] = {
+    return this.auctionPool.find(a => a.getId()==id)
   }
 
   def freeAuction(id:String) = {
@@ -29,9 +25,9 @@ object auctionPoolEntity{
     }
   }
 
-  def getFreeAuctionActor(id:String,replyTo: ActorRef[String]) : ActorRef[Command] = {
-    var auctionAux = getAuctionActorById(id)
-    if (auctionAux==null) {
+  def getFreeAuction(id:String,replyTo: ActorRef[String]) : AuctionInstance = {
+    var auctionAux = getAuctionById(id)
+    if (auctionAux==None) {
       var auctionInstances =this.auctionPool.find(a => a.getIsFree())
       if (auctionInstances == None) {
         replyTo ! "No hay instancias libres"
@@ -40,7 +36,7 @@ object auctionPoolEntity{
         var auctionInstance = auctionInstances.head
         auctionInstance.setIsFree(false)
         auctionInstance.setId(id)
-        return auctionInstance.getAuction()
+        return auctionInstance
       }
     } else {
       replyTo ! "Ya existe una subasta con Id "+id

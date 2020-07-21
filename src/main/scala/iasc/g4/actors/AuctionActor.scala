@@ -2,19 +2,19 @@ package iasc.g4.actors
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.{AbstractBehavior, Behaviors}
-
 import iasc.g4.actors.AuctionActor._
-import iasc.g4.actors.AuctionSpawnerActor.FreeAuction
+import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, FreeAuction}
 import iasc.g4.models.Models.{Auction, Bid, Buyer, Buyers, Command, OperationPerformed}
 import iasc.g4.util.Util.{getActors, _}
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.actor.typed.ActorRef
+import akka.actor.typed.receptionist.ServiceKey
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.AskPattern._
 import iasc.g4.actors.BuyersSubscriptorActor.{GetBuyer, GetBuyers}
-import iasc.g4.actors.NotifierSpawnerActor.NotifyNewAuction
+import iasc.g4.actors.NotifierSpawnerActor.{NotifierSpawnerCommand, NotifyNewAuction}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
@@ -29,14 +29,14 @@ object AuctionActor {
   final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction() extends Command
 
-  def apply(index: Long, auctionSpawner: ActorRef[Command]): Behavior[Command] =
-    Behaviors.setup(ctx => new AuctionActor(ctx,index,auctionSpawner))
+  def apply(index: Long,auctionActorServiceKey : ServiceKey[Command]): Behavior[Command] =
+    Behaviors.setup(ctx => new AuctionActor(ctx,index,auctionActorServiceKey))
 }
 
 private class AuctionActor(
                             context: ActorContext[Command],
                             index:Long,
-                            auctionSpawner:ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]
+                            auctionActorServiceKey : ServiceKey[Command]
                           ) extends AbstractBehavior[Command](context) {
 
   var id : String = ""
@@ -48,6 +48,8 @@ private class AuctionActor(
   var buyers = Set[Buyer]()
   var auction: Auction = null
 
+  //val AuctionActorServiceKey = ServiceKey[Command](s"AuctionActor$index")
+
   override def onMessage(msg: Command): Behavior[Command] =
     msg match {
       case StartAuction(auctionId,newAuction,replyTo) =>
@@ -56,15 +58,10 @@ private class AuctionActor(
         this.duration = newAuction.duration
         this.tags = newAuction.tags
         this.article = newAuction.article
-
         this.auction = newAuction
-
         context.scheduleOnce(this.duration.seconds, context.self, EndAuction())
-
         notifyNewAuction()
-
         replyTo ! "Auction index: " + this.index.toString() + "\nTimeout is " + this.duration.toString()
-
         Behaviors.same
       case MakeBid(newBid,replyTo) =>
         updateWinner(newBid.buyerName)
@@ -78,9 +75,10 @@ private class AuctionActor(
       case EndAuction() =>
         this.currentWinner match {
           case null => {}
-          case _ => makeHttpCall(this.currentWinner.ip+"?id="+this.id);
+          case _ => makeHttpCall(s"http://${this.currentWinner.ip}/subastaGanada?id=${this.id}");
         }
-        this.auctionSpawner ! FreeAuction(this.id)
+        //this.auctionSpawner ! FreeAuction(this.id)
+        freeAuction(this.id)
         Behaviors.same
     }
 
@@ -118,11 +116,23 @@ private class AuctionActor(
         } else {
           throw new IllegalStateException("NotifierSpawner no disponible")
         }
-
       }
       case Failure(_) => throw new IllegalStateException("NotifierSpawner no disponible")
     }
+  }
 
+  def freeAuction(auctionId:String) = {
+    var message = "NotifierSpawner no disponible"
+    getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).onComplete {
+      case Success(actors) => {
+        if (!actors.isEmpty) {
+          actors.head ! FreeAuction(auctionId)
+        } else {
+          throw new IllegalStateException(message)
+        }
+      }
+      case Failure(_) => throw new IllegalStateException(message)
+    }
   }
 
 

@@ -5,7 +5,7 @@ import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.ActorContext
 import akka.event.Logging
 import akka.http.scaladsl.model.StatusCodes
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Directives.{put, _}
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
 import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, MakeBid}
 import iasc.g4.actors.{AuctionSpawnerActor, BuyersSubscriptorActor}
@@ -76,20 +76,20 @@ class Routes(context: ActorContext[_]) {
       Option.empty
     }
 
-    def makeBid(auctionId:String,newBid:Bid):Future[String] = {
+    def makeBid(newBid:Bid):Future[String] = {
       getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
         if (!actors.isEmpty) {
-          actors.head.ask(MakeBid(auctionId,newBid,_)) (timeout, context.system.scheduler)
+          actors.head.ask(MakeBid(newBid.auctionId,newBid,_)) (timeout, context.system.scheduler)
         } else {
           Future.failed(new IllegalStateException("AuctionSpawner no disponible"))
         }
       )
     }
 
-    def createAuction(auctionId:String, newAuction: Auction): Future[String] =  {
+    def createAuction(newAuction: Auction): Future[String] =  {
       getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
         if (!actors.isEmpty) {
-          actors.head.ask(CreateAuction(auctionId,newAuction,_))(timeout, context.system.scheduler)
+          actors.head.ask(CreateAuction(newAuction.id,newAuction,_))(timeout, context.system.scheduler)
         } else {
           Future.failed(new IllegalStateException("AuctionSpawner no disponible"))
         }
@@ -105,24 +105,26 @@ class Routes(context: ActorContext[_]) {
 
   concat(
         pathEnd(
-          get {
-            complete(getAuctions)
-          }
+          concat(
+            get {
+              complete(getAuctions)
+            },
+            post {
+              entity(as[Auction]) { newAuction =>
+                complete(StatusCodes.Created, createAuction(newAuction))
+              }
+            },
+            put {
+              entity(as[Bid]) { newBid =>
+                complete(StatusCodes.Accepted, makeBid(newBid))
+              }
+            }
+          )
         ),
         path(Segment) { auctionId =>
           concat(
             get {
               complete(getAuction(auctionId))
-            },
-            post {
-              entity(as[Auction]) { newAuction =>
-                complete(StatusCodes.Created, createAuction(auctionId,newAuction))
-              }
-            },
-            put {
-              entity(as[Bid]) { newBid =>
-                complete(StatusCodes.Accepted, makeBid(auctionId,newBid))
-              }
             },
             delete {
               complete(cancelAuction(auctionId))

@@ -42,10 +42,7 @@ object NotifierSpawnerActor {
 
       Behaviors.receiveMessage {
         case NotifyNewAuction(buyersNotified, auction) =>
-
           printf("***************************************************************************************************************** Numero {}", buyersNotified.size)
-
-
           for (buyer <- buyersNotified){
             router ! NotifierActor.NewAuction(buyer, auction)
           }
