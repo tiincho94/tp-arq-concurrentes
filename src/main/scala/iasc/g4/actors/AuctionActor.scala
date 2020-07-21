@@ -60,13 +60,14 @@ private class AuctionActor(
         this.article = newAuction.article
         this.auction = newAuction
         context.scheduleOnce(this.duration.seconds, context.self, EndAuction())
-        notifyNewAuction()
+        selfNotifyNewAuction(this.auction.id) //TODO
         replyTo ! "Auction index: " + this.index.toString() + "\nTimeout is " + this.duration.toString()
         Behaviors.same
       case MakeBid(newBid,replyTo) =>
-        updateWinner(newBid.buyerName)
         if (newBid.price > this.price) {
+          updateWinner(newBid.buyerName)
           this.price = newBid.price
+          selfNotifyNewPrice(this.price) //TODO
           replyTo ! "El nuevo precio es: $"+this.price+" y el ganador actual es "+newBid.buyerName
         } else {
           replyTo ! "El precio enviado no puede ser menor que el establecido"
@@ -75,7 +76,10 @@ private class AuctionActor(
       case EndAuction() =>
         this.currentWinner match {
           case null => {}
-          case _ => makeHttpCall(s"http://${this.currentWinner.ip}/subastaGanada?id=${this.id}");
+          case _ => {
+            selfNotifyWinner() //TODO
+            selfNotifyLosers(currentWinner) //TODO
+          };
         }
         //this.auctionSpawner ! FreeAuction(this.id)
         freeAuction(this.id)
@@ -98,7 +102,17 @@ private class AuctionActor(
       }
     }
 
-    def getBuyer(name:String): Future[Buyer] = {
+  def getBuyers(): Future[Buyers] = {
+    getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
+      if (!actors.isEmpty) {
+        actors.head.ask(GetBuyers(this.auction.tags,_))(getTimeout(context), context.system.scheduler)
+      } else {
+        Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
+      }
+    )
+  }
+
+  def getBuyer(name:String): Future[Buyer] = {
       getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
         if (!actors.isEmpty) {
           actors.head.ask(GetBuyer(name,_))(getTimeout(context), context.system.scheduler)
@@ -106,13 +120,40 @@ private class AuctionActor(
           Future.failed(new IllegalStateException("BuyersSubscriptor no disponible"))
         }
       )
-    }
+  }
 
-  def notifyNewAuction() = {
+  def selfNotifyWinner() = {
+    makeHttpCall(s"http://${this.currentWinner.ip}/subastaGanada?id=${this.id}")
+  }
+
+  def selfNotifyLosers(currentWinner:Buyer) = {
+    this.buyers.foreach(
+      buyer =>
+        if(!buyer.equals(currentWinner)) {
+          makeHttpCall(s"http://${buyer.ip}/subastaPerdida?id=${this.auction.id}")
+        }
+    )
+  }
+
+  def selfNotifyNewPrice(newPrice:Double) = {
+    this.buyers.foreach(
+      buyer => makeHttpCall(s"http://${buyer.ip}/nuevoPrecio?id=${this.auction.id}&precio=${newPrice}")
+    )
+  }
+
+  def selfNotifyNewAuction(auctionId:String) = {
     getActors(context, NotifierSpawnerActor.NotifierSpawnerServiceKey).onComplete {
       case Success(actors) => {
         if (!actors.isEmpty) {
-          actors.head ! NotifyNewAuction(this.buyers, this.auction)
+          getBuyers().onComplete {
+            case Success(remoteBuyers) => {
+              remoteBuyers.buyers.foreach(
+                buyer => makeHttpCall(s"http://${buyer.ip}/nuevaSubasta?id=${auctionId}")
+              )
+            }
+            case Failure(_) => {this.context.log.error("Imposible obtener buyers")}
+          }
+          //actors.head ! NotifyNewAuction(this.buyers, this.auction)
         } else {
           throw new IllegalStateException("NotifierSpawner no disponible")
         }
