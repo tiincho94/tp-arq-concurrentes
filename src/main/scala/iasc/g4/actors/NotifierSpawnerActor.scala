@@ -21,9 +21,7 @@ object NotifierSpawnerActor {
 
   trait NotifierSpawnerCommand extends Command
 
-  final case class NotifyNewAuction(buyersNotified: Set[Buyer], auction: Auction) extends NotifierSpawnerCommand
-
-  final case class NotifyNewAuction2(auction: Auction) extends NotifierSpawnerCommand
+  final case class NotifyNewAuction(auction: Auction) extends NotifierSpawnerCommand
   final case class NotifyNewPrice(auction: Auction, buyers: Set[String], newPrice: Double) extends NotifierSpawnerCommand
   final case class NotifyWinner(auction: Auction, winnerName: String) extends NotifierSpawnerCommand
   final case class NotifyLosers(auction: Auction, loosers: Set[String]) extends NotifierSpawnerCommand
@@ -42,13 +40,7 @@ object NotifierSpawnerActor {
       val router = ctx.spawn(pool, "notifier-pool")
 
       Behaviors.receiveMessage {
-        case NotifyNewAuction(buyersNotified, auction) =>
-          printf(s"Notificando new auction a ${buyersNotified.size} buyers")
-          for (buyer <- buyersNotified) {
-            router ! NotifierActor.NewAuction(buyer, auction)
-          }
-          Behaviors.same
-        case NotifyNewAuction2(auction) =>
+        case NotifyNewAuction(auction) =>
           getBuyers(ctx, auction).buyers.foreach { buyer =>
             router ! NotifierActor.NewAuction(buyer, auction)
           }

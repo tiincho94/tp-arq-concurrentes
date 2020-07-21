@@ -10,17 +10,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class ClienteController {
-	
-	@GetMapping("/{message}")	
-	ResponseEntity<?> recibirNotificacion (
-			@PathParam("id") String id
-			) throws Exception{
-				System.out.println("Mensaje: " + message "; Subasta: "+ id);
-				HttpHeaders respHeaders = new HttpHeaders();
-				respHeaders.setCacheControl("must-revalidate, post-check=0, pre-check=0");
-				return new ResponseEntity<String>(responseSt, respHeaders, HttpStatus.OK);
-	}
-	
-	
 
+	@GetMapping("/{message}")	
+	public ResponseEntity<String> recibirNotificacion(@PathParam("id") String id, @PathParam("message") String message) {
+		String resp = "Mensaje: " + message + "; Subasta: "+ id;
+		System.out.println(resp);
+		HttpHeaders respHeaders = new HttpHeaders();
+		respHeaders.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+		return new ResponseEntity<>("Mensaje: " + resp + "; Subasta: "+ id, respHeaders, HttpStatus.OK);
+	}
 }

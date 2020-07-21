@@ -8,14 +8,11 @@ import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, FreeAuction}
 import iasc.g4.models.Models.{Auction, Bid, Buyer, Buyers, Command, OperationPerformed}
 import iasc.g4.util.Util.{getActors, _}
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.ServiceKey
 import akka.actor.typed.scaladsl.ActorContext
-import akka.actor.typed.scaladsl.AskPattern._
-import iasc.g4.actors.BuyersSubscriptorActor.{GetBuyer, GetBuyers}
-import iasc.g4.actors.NotifierSpawnerActor.{NotifierSpawnerCommand, NotifyCancellation, NotifyLosers, NotifyNewAuction, NotifyNewAuction2, NotifyNewPrice, NotifyWinner}
+import iasc.g4.actors.NotifierSpawnerActor._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
@@ -118,7 +115,7 @@ private class AuctionActor(
   }
 
   def selfNotifyNewAuction(auctionId:String) = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewAuction2(auction)
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewAuction(auction)
   }
 
   def freeAuction(auctionId:String) = {
