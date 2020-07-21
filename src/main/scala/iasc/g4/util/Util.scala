@@ -10,7 +10,6 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import iasc.g4.models.Models.OperationPerformed
-import sttp.client._
 import scala.concurrent._
 import scala.util.{Failure, Success}
 
@@ -61,7 +60,7 @@ object Util {
     responseFuture
       .onComplete {
         case Success(_) => OperationPerformed("Http call ok")
-        case Failure(err)   => system.log.error("Error haciendo http call", err)
+        case Failure(err) => system.log.error(err,"Error haciendo http call")
       }
   }
 
