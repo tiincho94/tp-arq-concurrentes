@@ -1,18 +1,12 @@
 package iasc.g4.actors
 
-import akka.actor.typed.Behavior
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.scaladsl.Behaviors
 
 import iasc.g4.models.Models.Command
-import iasc.g4.actors.NotifierActor
-import iasc.g4.models.Models.OperationPerformed
 import iasc.g4.models.Models.Buyer
 import iasc.g4.models.Models.Auction
 
 import akka.actor.typed.scaladsl.{ Behaviors, Routers }
-import scala.concurrent.Future
-import scala.util.{Failure, Success}
 import akka.actor.typed.{ Behavior, SupervisorStrategy }
 import akka.actor.typed.{ActorRef, Behavior}
 
@@ -42,7 +36,7 @@ object NotifierSpawnerActor {
 
       Behaviors.receiveMessage {
         case NotifyNewAuction(buyersNotified, auction) =>
-          printf("***************************************************************************************************************** Numero {}", buyersNotified.size)
+          printf(s"Notificando new auction a ${buyersNotified.size} buyers")
           for (buyer <- buyersNotified){
             router ! NotifierActor.NewAuction(buyer, auction)
           }

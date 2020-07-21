@@ -10,7 +10,7 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import iasc.g4.models.Models.OperationPerformed
-
+import sttp.client._
 import scala.concurrent._
 import scala.util.{Failure, Success}
 
@@ -40,6 +40,19 @@ object Util {
     )(ctx.executionContext)
   }
 
+  /**
+   * Obtener el primer actor disponible para la key indicada
+   * @param ctx
+   * @param key
+   * @tparam T
+   * @return
+   */
+  def getOneActor[T](ctx: ActorContext[_], key: ServiceKey[T]): ActorRef[T] = {
+    val actors : Set[ActorRef[T]] = Await.result(getActors(ctx, key), getTimeout(ctx).duration)
+    if (actors.isEmpty) throw new IllegalStateException(s"Actor no disponible para key ${key.id}")
+    actors.head
+  }
+
   def makeHttpCall(_uri : String):Unit = {
     implicit val system = ActorSystem()
     implicit val materializer = ActorMaterializer()
@@ -47,8 +60,10 @@ object Util {
     val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = _uri))
     responseFuture
       .onComplete {
-        case Success(res) => OperationPerformed("TBD")
-        case Failure(_)   => sys.error("----------------------------------------------------------------------------------------------------------------something wrong")
+        case Success(_) => OperationPerformed("Http call ok")
+        case Failure(err)   => system.log.error("Error haciendo http call", err)
       }
   }
+
+
 }
