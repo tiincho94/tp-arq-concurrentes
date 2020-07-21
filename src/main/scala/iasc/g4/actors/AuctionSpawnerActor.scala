@@ -21,7 +21,7 @@ object AuctionSpawnerActor {
   val AuctionSpawnerServiceKey = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
   // definición de commands (acciones a realizar)
   final case class GetAuctions(replyTo: ActorRef[Auctions]) extends AuctionSpawnerCommand
-  final case class DeleteAuction(auctionId: String, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
+  final case class DeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
   // final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
   final case class CreateAuction(auctionId:String,newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
   final case class MakeBid(auctionId:String, newBid:Bid, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
@@ -55,8 +55,9 @@ object AuctionSpawnerActor {
         //replyTo ! Auctions(auctions)
         Behaviors.same
       case DeleteAuction(auctionId, replyTo) =>
-        // TODO implementar
-        replyTo ! OperationPerformed("TBD")
+        var auctionActor = auctionPoolEntity.getAuctionById(auctionId)
+        if(auctionActor!=None)
+          auctionActor.head.getAuction() ! AuctionActor.DeleteAuction(replyTo)
         Behaviors.same
       case CreateAuction(auctionId,newAuction, replyTo) =>
         var auctionActor = auctionPoolEntity.getFreeAuction(auctionId,replyTo).getAuction()

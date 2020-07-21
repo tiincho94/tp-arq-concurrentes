@@ -1,5 +1,6 @@
 package iasc.g4.actors
 
+import akka.actor.Cancellable
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.{AbstractBehavior, Behaviors}
 import iasc.g4.actors.AuctionActor._
@@ -26,8 +27,9 @@ import scala.util.{Failure, Success}
 object AuctionActor {
   final case class StartAuction(auctionId:String, newAuction: Auction, replyTo: ActorRef[String]) extends Command
   final case class MakeBid(newBid:Bid, replyTo: ActorRef[String]) extends Command
-  final case class Init(index:Long,auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
+  final case class Init(index:Long , auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction() extends Command
+  final case class DeleteAuction(replyTo:ActorRef[String]) extends Command
 
   def apply(index: Long,auctionActorServiceKey : ServiceKey[Command]): Behavior[Command] =
     Behaviors.setup(ctx => new AuctionActor(ctx,index,auctionActorServiceKey))
@@ -47,6 +49,7 @@ private class AuctionActor(
   var currentWinner: Buyer = null
   var buyers = Set[Buyer]()
   var auction: Auction = null
+  var timeout: Cancellable = null
 
   //val AuctionActorServiceKey = ServiceKey[Command](s"AuctionActor$index")
 
@@ -59,7 +62,7 @@ private class AuctionActor(
         this.tags = newAuction.tags
         this.article = newAuction.article
         this.auction = newAuction
-        context.scheduleOnce(this.duration.seconds, context.self, EndAuction())
+        this.timeout = context.scheduleOnce(this.duration.seconds, context.self, EndAuction())
         selfNotifyNewAuction(this.auction.id) //TODO
         replyTo ! "Auction index: " + this.index.toString() + "\nTimeout is " + this.duration.toString()
         Behaviors.same
@@ -68,9 +71,9 @@ private class AuctionActor(
           updateWinner(newBid.buyerName)
           this.price = newBid.price
           selfNotifyNewPrice(this.price) //TODO
-          replyTo ! "El nuevo precio es: $"+this.price+" y el ganador actual es "+newBid.buyerName
+          replyTo ! s"El nuevo precio es: |${this.price}| y el ganador por el momento es |${newBid.buyerName}|"
         } else {
-          replyTo ! "El precio enviado no puede ser menor que el establecido"
+          replyTo ! s"El precio enviado |${newBid.price}| puede ser menor que el establecido |${this.price}|"
         }
         Behaviors.same
       case EndAuction() =>
@@ -83,6 +86,10 @@ private class AuctionActor(
         }
         //this.auctionSpawner ! FreeAuction(this.id)
         freeAuction(this.id)
+        Behaviors.same
+      case DeleteAuction(replyTo) =>
+        this.timeout.cancel()
+        selfNotifyCancelledAuction()
         Behaviors.same
     }
 
@@ -132,6 +139,12 @@ private class AuctionActor(
         if(!buyer.equals(currentWinner)) {
           makeHttpCall(s"http://${buyer.ip}/subastaPerdida?id=${this.auction.id}")
         }
+    )
+  }
+
+  def selfNotifyCancelledAuction() = {
+    this.buyers.foreach(
+      buyer => makeHttpCall(s"http://${buyer.ip}/subastaCancelada?id=${this.auction.id}")
     )
   }
 

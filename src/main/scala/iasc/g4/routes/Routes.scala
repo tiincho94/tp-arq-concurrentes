@@ -7,7 +7,7 @@ import akka.event.Logging
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives.{put, _}
 import akka.http.scaladsl.server.{ExceptionHandler, Route}
-import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, MakeBid}
+import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, DeleteAuction, MakeBid}
 import iasc.g4.actors.{AuctionSpawnerActor, BuyersSubscriptorActor}
 import iasc.g4.actors.BuyersSubscriptorActor.{CreateBuyer, GetBuyers}
 import iasc.g4.models.Models.Command
@@ -95,9 +95,9 @@ class Routes(context: ActorContext[_]) {
         }
       )
     }
-    def cancelAuction(auctionId: String): Future[String] = Future {
-      // TODO integrar con actor
-      "Ok!"
+
+    def cancelAuction(auctionId: String): Future[String] = {
+      getOneActor(context,AuctionSpawnerActor.AuctionSpawnerServiceKey).ask(DeleteAuction(auctionId,_))(timeout, context.system.scheduler)
     }
 
 //    val routes: Route = pathPrefix("auctions") {
