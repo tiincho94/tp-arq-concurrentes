@@ -1,7 +1,9 @@
 package iasc.g4
 
+import akka.actor.ActorRef
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
+import akka.cluster.ddata.DistributedData
 import akka.cluster.typed.Cluster
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
@@ -20,6 +22,7 @@ object App{
   object RootBehavior {
     def apply(): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
       val cluster = Cluster(context.system)
+      val replicator: ActorRef = DistributedData(context.system).replicator
       if (cluster.selfMember.hasRole(Roles.Seed.roleName)) {
         // empty
       } else if (cluster.selfMember.hasRole(Roles.Listener.roleName)) {
