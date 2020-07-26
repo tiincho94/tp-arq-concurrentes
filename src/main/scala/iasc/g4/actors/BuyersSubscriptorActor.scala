@@ -23,10 +23,10 @@ object BuyersSubscriptorActor {
 
   val BuyersSubscriptorServiceKey = ServiceKey[BuyersSubscriptorCommand]("BuyerSubscriptor")
 
-  var buyersSet = Set[Buyer]()
+  //var buyersSet = Set[Buyer]()
 
 
-  final case class GetBuyer(name: String, replyTo: ActorRef[Buyer]) extends BuyersSubscriptorCommand
+  final case class GetBuyer(name: String, replyTo: ActorRef[Option[Buyer]]) extends BuyersSubscriptorCommand
 
   final case class GetBuyers(tags: Set[String] = Set(), replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
 
@@ -34,7 +34,9 @@ object BuyersSubscriptorActor {
 
   private sealed trait InternalCommand extends Command
   private case class InternalUpdateResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
-  private case class InternalGetResponse(replyTo: ActorRef[Buyers], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
+  private case class InternalBuyersGetResponse(replyTo: ActorRef[Buyers], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
+
+  private case class InternalBuyerGetResponse(name:String, replyTo: ActorRef[Option[Buyer]], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
 
 
   private val timeout = 3.seconds
@@ -54,7 +56,7 @@ object BuyersSubscriptorActor {
           ctx.log.info("Configurando BuyerSubscriptor")
           ctx.system.receptionist ! Receptionist.Register(BuyersSubscriptorServiceKey, ctx.self)
 
-          def updateCart(data: LWWMap[String, Buyer], buyer: Buyer, replyTo: ActorRef[String]): LWWMap[String, Buyer] = {
+          def updateBuyers(data: LWWMap[String, Buyer], buyer: Buyer, replyTo: ActorRef[String]): LWWMap[String, Buyer] = {
             data.get(buyer.name) match {
               case Some(_) => {
                 replyTo ! "Nombre no disponible"
@@ -67,10 +69,12 @@ object BuyersSubscriptorActor {
             }
           }
 
+          /*
           /**
            * @param tags
            * @return buyers que tengan cualquiera de los tags provistos
            */
+
           def filterBuyers(tags: Set[String]): Buyers = {
             var buyers = Set[Buyer]()
             this.buyersSet.foreach(buyer => {
@@ -81,17 +85,33 @@ object BuyersSubscriptorActor {
               }
             })
             Buyers(buyers)
-          }
+          }*/
 
           Behaviors.receiveMessage {
             case GetBuyer(name, replyTo) =>
-
-              buyersSet.find(buyer => buyer.name == name) match {
-                case Some(buyer) => replyTo ! buyer
-                case None => throw new IllegalArgumentException(s"buyer no encontrado $name")
-              }
+              replicator.askGet(
+                askReplyTo => Get(DataKey, readMajority, askReplyTo),
+                rsp => InternalBuyerGetResponse(name, replyTo, rsp)
+              )
+              /*replyTo ! buyersSet.find(buyer => buyer.name == name) */
               Behaviors.same
 
+            case InternalBuyerGetResponse(name, replyTo, g @ GetSuccess(DataKey, _)) =>
+              val data = g.get(DataKey)
+              val buyers = data.entries.values.toSet
+              replyTo ! buyers.find(buyer => buyer.name == name)
+              Behaviors.same
+
+            case InternalBuyerGetResponse(name, replyTo, NotFound(DataKey, _)) =>
+              replyTo ! None
+              Behaviors.same
+
+            case InternalBuyerGetResponse(name, replyTo, GetFailure(DataKey, _)) =>
+              // ReadMajority failure, try again with local read
+              replicator.askGet(
+                askReplyTo => Get(DataKey, ReadLocal, askReplyTo),
+                rsp => InternalBuyerGetResponse(name, replyTo, rsp))
+              Behaviors.same
 
             case InternalUpdateResponse(_: UpdateSuccess[_]) => Behaviors.same
             case InternalUpdateResponse(_: UpdateTimeout[_]) => Behaviors.same
@@ -99,42 +119,34 @@ object BuyersSubscriptorActor {
             case InternalUpdateResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
 
             case GetBuyers(tags, replyTo) =>
-
-              //if (tags.isEmpty) {
-              //  replyTo ! Buyers(this.buyersSet)
-              //} else {
-              //  replyTo ! filterBuyers(tags)
-              // }
-              // Behaviors.same
-
               replicator.askGet(
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
-                rsp => InternalGetResponse(replyTo, rsp))
+                rsp => InternalBuyersGetResponse(replyTo, rsp)
+              )
               Behaviors.same
 
-            case InternalGetResponse(replyTo, g @ GetSuccess(DataKey, _)) =>
+            case InternalBuyersGetResponse(replyTo, g @ GetSuccess(DataKey, _)) =>
               val data = g.get(DataKey)
               val buyers = Buyers(data.entries.values.toSet)
               replyTo ! buyers
               Behaviors.same
 
-            case InternalGetResponse(replyTo, NotFound(DataKey, _)) =>
+            case InternalBuyersGetResponse(replyTo, NotFound(DataKey, _)) =>
               replyTo ! Buyers(Set.empty)
               Behaviors.same
 
-            case InternalGetResponse(replyTo, GetFailure(DataKey, _)) =>
+            case InternalBuyersGetResponse(replyTo, GetFailure(DataKey, _)) =>
               // ReadMajority failure, try again with local read
               replicator.askGet(
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
-                rsp => InternalGetResponse(replyTo, rsp))
-
+                rsp => InternalBuyersGetResponse(replyTo, rsp))
               Behaviors.same
 
             case CreateBuyer(buyer, replyTo) =>
               println("create buyer...")
               replicator.askUpdate(
                 askReplyTo => Update(DataKey, LWWMap.empty[String, Buyer], writeMajority, askReplyTo) {
-                  buyerSet => updateCart(buyerSet, buyer, replyTo)
+                  buyerSet => updateBuyers(buyerSet, buyer, replyTo)
                 },
                 InternalUpdateResponse.apply)
               Behaviors.same

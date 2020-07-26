@@ -1,6 +1,7 @@
 package iasc.g4.actors.entities
 
 import akka.actor.typed.ActorRef
+import akka.actor.typed.receptionist.ServiceKey
 import iasc.g4.models.AuctionInstance
 import iasc.g4.models.Models.Command
 
@@ -44,7 +45,17 @@ object auctionPoolEntity{
     }
   }
 
-  def getAuctionInstance(_index:Long,router:ActorRef[Command]) : AuctionInstance = {
+  def getAuctionInstance(_index:Long, _auctionActorServiceKey : ServiceKey[Command]) : AuctionInstance = {
+    var auctionInstance : AuctionInstance = new AuctionInstance() {
+      override var id: String = null
+      override var isFree: Boolean = true
+      override var auctionActorServiceKey: ServiceKey[Command] = _auctionActorServiceKey
+      override var index: Long = _index
+    }
+    return auctionInstance
+  }
+
+  /*def getAuctionInstance(_index:Long,router:ActorRef[Command]) : AuctionInstance = {
     var auctionInstance : AuctionInstance = new AuctionInstance() {
       override var id: String = null
       override var isFree: Boolean = true
@@ -52,6 +63,6 @@ object auctionPoolEntity{
       override var index: Long = _index
     }
     return auctionInstance
-  }
+  }*/
 
 }

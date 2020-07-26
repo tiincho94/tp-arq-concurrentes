@@ -57,6 +57,7 @@ object App{
     val BuyersSuscriptor: Val = Val("buyers-suscriptor")
     val AuctionSpawner: Val = Val("auction-spawner")
     val NotifierSpawner: Val = Val("notifier-spawner")
+    val Auction: Val = Val("auction")
   }
 
   /**
@@ -98,6 +99,7 @@ object App{
     system.log.info(s"$role (Role) available at ${system.address}")
 
   }
+
 
   /**
    * Iniciar http server

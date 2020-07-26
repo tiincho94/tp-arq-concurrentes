@@ -10,7 +10,7 @@ import iasc.g4.util.Util.{getActors, _}
 
 import scala.concurrent.duration._
 import akka.actor.typed.ActorRef
-import akka.actor.typed.receptionist.ServiceKey
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.ActorContext
 import iasc.g4.actors.NotifierSpawnerActor._
 
@@ -29,11 +29,17 @@ object AuctionActor {
   final case class DeleteAuction(replyTo:ActorRef[String]) extends Command
 
   def apply(index: Long,auctionActorServiceKey : ServiceKey[Command]): Behavior[Command] =
-    Behaviors.setup(ctx => new AuctionActor(ctx,index,auctionActorServiceKey))
+    Behaviors.setup(ctx => {
+      ctx.system.receptionist ! Receptionist.Register(auctionActorServiceKey, ctx.self)
+      new AuctionActor(ctx, index, auctionActorServiceKey)
+    }
+  )
+  /*def apply(): Behavior[Command] =
+    Behaviors.setup(ctx => new AuctionActor(ctx))*/
 }
 
 private class AuctionActor(
-                            context: ActorContext[Command],
+                            context: ActorContext[Command] ,
                             index:Long,
                             auctionActorServiceKey : ServiceKey[Command]
                           ) extends AbstractBehavior[Command](context) {

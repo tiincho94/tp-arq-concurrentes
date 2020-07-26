@@ -52,7 +52,10 @@ object NotifierSpawnerActor {
           })
           Behaviors.same
         case NotifyWinner(auction, winnerName) =>
-          router ! NotifierActor.Winner(getBuyer(ctx, winnerName), auction)
+          getBuyer(ctx, winnerName) match {
+            case Some(buyer) => router ! NotifierActor.Winner(buyer, auction)
+            case None => ctx.log.error(s"Buyer con nombre $winnerName no encontrado")
+          }
           Behaviors.same
         case NotifyLosers(auction, loosers) =>
           val set: Set[Buyer] = getBuyers(ctx,auction).buyers
@@ -75,7 +78,7 @@ object NotifierSpawnerActor {
     Await.result(f, getTimeout(ctx).duration)
   }
 
-  def getBuyer(ctx: ActorContext[_], name: String): Buyer = {
+  def getBuyer(ctx: ActorContext[_], name: String): Option[Buyer] = {
     val actor = getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey)
     val f = actor.ask(GetBuyer(name, _))(getTimeout(ctx), ctx.system.scheduler)
     Await.result(f, getTimeout(ctx).duration)

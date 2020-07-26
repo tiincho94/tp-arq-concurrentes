@@ -1,6 +1,7 @@
 package iasc.g4.models
 
 import akka.actor.typed.ActorRef
+import akka.actor.typed.receptionist.ServiceKey
 import iasc.g4.CborSerializable
 import iasc.g4.actors.AuctionActor
 import iasc.g4.models.Models.{Command, OperationPerformed}
@@ -30,7 +31,7 @@ abstract class AuctionInstance() {
   var index :Long
   var id:String
   var isFree:Boolean
-  var auction:ActorRef[Command]
+  var auctionActorServiceKey: ServiceKey[Command]
 
   def setIndex(_index:Long):Unit = {
     this.index = _index
@@ -44,11 +45,11 @@ abstract class AuctionInstance() {
   def getId(): String ={
     return id
   }
-  def setAuction(_actor: ActorRef[Command]) = {
-    this.auction = _actor
+  def setAuctionKey(_auctionActorServiceKey: ServiceKey[Command]) = {
+    this.auctionActorServiceKey = _auctionActorServiceKey
   }
-  def getAuction(): ActorRef[Command] ={
-    return auction
+  def getAuctionKey(): ServiceKey[Command] ={
+    return auctionActorServiceKey
   }
   def setIsFree(_isFree : Boolean) = {
     this.isFree = _isFree
