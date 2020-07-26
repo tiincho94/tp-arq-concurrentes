@@ -33,7 +33,7 @@ object BuyersSubscriptorActor {
   final case class CreateBuyer(buyer: Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
   private case class InternalUpdateResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
-  private case class InternalBuyersGetResponse(replyTo: ActorRef[Buyers], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
+  private case class InternalBuyersGetResponse(tags: Set[String], replyTo: ActorRef[Buyers], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
 
   private case class InternalBuyerGetResponse(name:String, replyTo: ActorRef[Option[Buyer]], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
 
@@ -68,23 +68,20 @@ object BuyersSubscriptorActor {
             }
           }
 
-          /*
           /**
+           * @param buyers
            * @param tags
            * @return buyers que tengan cualquiera de los tags provistos
            */
-
-          def filterBuyers(tags: Set[String]): Buyers = {
-            var buyers = Set[Buyer]()
-            this.buyersSet.foreach(buyer => {
-              for (tag <- tags) {
-                if (buyer.tags.contains(tag)) {
-                  buyers += buyer
-                }
-              }
-            })
-            Buyers(buyers)
-          }*/
+          def filterBuyers(buyers: Set[Buyer], tags: Set[String]): Buyers = {
+            if (tags.isEmpty) {
+              Buyers(buyers)
+            } else {
+              var result = Set[Buyer]()
+              buyers.foreach(buyer => for (tag <- tags) if (buyer.tags.contains(tag)) result += buyer)
+              Buyers(result)
+            }
+          }
 
           Behaviors.receiveMessage {
             case GetBuyer(name, replyTo) =>
@@ -92,7 +89,6 @@ object BuyersSubscriptorActor {
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
                 rsp => InternalBuyerGetResponse(name, replyTo, rsp)
               )
-              /*replyTo ! buyersSet.find(buyer => buyer.name == name) */
               Behaviors.same
 
             case InternalBuyerGetResponse(name, replyTo, g @ GetSuccess(DataKey, _)) =>
@@ -114,31 +110,29 @@ object BuyersSubscriptorActor {
 
             case InternalUpdateResponse(_: UpdateSuccess[_]) => Behaviors.same
             case InternalUpdateResponse(_: UpdateTimeout[_]) => Behaviors.same
-            // UpdateTimeout, will eventually be replicated
             case InternalUpdateResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
 
             case GetBuyers(tags, replyTo) =>
               replicator.askGet(
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
-                rsp => InternalBuyersGetResponse(replyTo, rsp)
+                rsp => InternalBuyersGetResponse(tags, replyTo, rsp)
               )
               Behaviors.same
 
-            case InternalBuyersGetResponse(replyTo, g @ GetSuccess(DataKey, _)) =>
+            case InternalBuyersGetResponse(tags, replyTo, g @ GetSuccess(DataKey, _)) =>
               val data = g.get(DataKey)
-              val buyers = Buyers(data.entries.values.toSet)
-              replyTo ! buyers
+              replyTo ! filterBuyers(data.entries.values.toSet, tags)
               Behaviors.same
 
-            case InternalBuyersGetResponse(replyTo, NotFound(DataKey, _)) =>
+            case InternalBuyersGetResponse(tags, replyTo, NotFound(DataKey, _)) =>
               replyTo ! Buyers(Set.empty)
               Behaviors.same
 
-            case InternalBuyersGetResponse(replyTo, GetFailure(DataKey, _)) =>
+            case InternalBuyersGetResponse(tags, replyTo, GetFailure(DataKey, _)) =>
               // ReadMajority failure, try again with local read
               replicator.askGet(
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
-                rsp => InternalBuyersGetResponse(replyTo, rsp))
+                rsp => InternalBuyersGetResponse(tags, replyTo, rsp))
               Behaviors.same
 
             case CreateBuyer(buyer, replyTo) =>
