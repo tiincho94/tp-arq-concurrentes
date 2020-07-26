@@ -30,7 +30,7 @@ object AuctionActor {
 
   def apply(index: Long,auctionActorServiceKey : ServiceKey[Command]): Behavior[Command] =
     Behaviors.setup(ctx => {
-      ctx.system.receptionist ! Receptionist.Register(auctionActorServiceKey, ctx.self)
+
       new AuctionActor(ctx, index, auctionActorServiceKey)
     }
   )
@@ -55,6 +55,8 @@ private class AuctionActor(
   var timeout: Cancellable = null
 
   //val AuctionActorServiceKey = ServiceKey[Command](s"AuctionActor$index")
+  context.system.receptionist ! Receptionist.Register(auctionActorServiceKey, context.self)
+  println("Registrado")
 
   override def onMessage(msg: Command): Behavior[Command] =
     msg match {

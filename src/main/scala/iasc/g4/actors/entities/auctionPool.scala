@@ -1,11 +1,12 @@
-package iasc.g4.actors.entities
+/*package iasc.g4.actors.entities
 
 import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.ServiceKey
+import iasc.g4.CborSerializable
 import iasc.g4.models.AuctionInstance
 import iasc.g4.models.Models.Command
 
-object auctionPoolEntity{
+object AuctionPoolEntity extends CborSerializable {
   var auctionPool = Set[AuctionInstance]()
 
   def set(auctionPool:Set[AuctionInstance]): Unit ={
@@ -66,3 +67,4 @@ object auctionPoolEntity{
   }*/
 
 }
+*/

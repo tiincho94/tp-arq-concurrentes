@@ -1,24 +1,27 @@
 package iasc.g4.actors
 
-//import akka.actor.ActorRef
-import akka.actor.typed.scaladsl.AskPattern._
+import scala.concurrent.duration._
 import iasc.g4.models.AuctionInstance
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, DispatcherSelector, SupervisorStrategy}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import iasc.g4.models.Models.{Auction, Auctions, Bid, Buyer, Command, OperationPerformed}
+import iasc.g4.models.Models.{Auction, Auctions, Bid, Buyer, Command, InternalCommand, OperationPerformed}
 import akka.actor.typed.scaladsl.Behaviors
-import akka.cluster.ddata.DistributedData
+import akka.cluster.ddata.Replicator.{GetResponse, ReadMajority, UpdateResponse, WriteMajority}
+import akka.cluster.ddata.typed.scaladsl.{DistributedData, Replicator}
+import akka.cluster.ddata.typed.scaladsl.Replicator.{Get, GetSuccess, Update}
+import akka.cluster.ddata.{Flag, LWWMap, LWWMapKey, ReplicatedData, SelfUniqueAddress}
 import akka.cluster.typed.Cluster
 import com.typesafe.config.ConfigFactory
 import iasc.g4.App.{Roles, RootBehavior, startHttpServer}
-import iasc.g4.actors.entities.auctionPoolEntity
-import iasc.g4.routes.Routes
+import iasc.g4.actors.BuyersSubscriptorActor.{InternalBuyerGetResponse, InternalUpdateResponse, readMajority, writeMajority}
+//import iasc.g4.actors.entities.auctionPoolEntity
 import iasc.g4.util.Util
 
 /**
  * Actor spawner de Auctions. Maneja nuevas subastas, su cancelación, etc
  */
 object AuctionSpawnerActor {
+
   //  TODO Revisar Escenario 7 de la consigna -> Debería no ser fijo, primer implementación sería crear
   //  libremente nuevas y en una segunda meter lo que pide el escenario 7
 
@@ -26,98 +29,151 @@ object AuctionSpawnerActor {
 
   var auctionPool = Set[AuctionInstance]()
   val AuctionSpawnerServiceKey = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
-  // definición de commands (acciones a realizar)
+
+  //Mensajes externos
   final case class GetAuctions(replyTo: ActorRef[Auctions]) extends AuctionSpawnerCommand
   final case class DeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
-  // final case class CreateAuction(newAuction: Auction, replyTo: ActorRef[OperationPerformed]) extends AuctionSpawnerCommand
-  final case class CreateAuction(auctionId:String,newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
-  final case class MakeBid(auctionId:String, newBid:Bid, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
-  final case class FreeAuction(id:String) extends AuctionSpawnerCommand
-  sealed trait Event
-  private case object Tick extends Event
-  //private final case class WorkersUpdated(newWorkers: Set[ActorRef[Worker.TransformText]]) extends Event
-  private final case class TransformCompleted(originalText: String, transformedText: String) extends Event
-  private final case class JobFailed(why: String, text: String) extends Event
+  final case class CreateAuction(auctionId: String, newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  final case class MakeBid(auctionId: String, newBid: Bid, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  final case class FreeAuction(id: String) extends AuctionSpawnerCommand
+
+  //Mensajes internos
+  final case class InternalDeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  private case class InternalDeleteAuctionResponse(auctionId:String, replyTo: ActorRef[String], rsp: GetResponse[LWWMap[Long, AuctionInstance]]) extends InternalCommand
+  private case class InternalCreateAuctionResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
+
+
+
+  private val timeout = 3.seconds
+  private val readMajority = ReadMajority(timeout)
+  private val writeMajority = WriteMajority(timeout)
 
   // instanciación del objeto
   def apply(): Behavior[Command] = Behaviors.setup { ctx =>
-    var poolSize = ctx.system.settings.config.getInt("akka.cluster.auction-pool-size")
+    DistributedData.withReplicatorMessageAdapter[Command, Flag] { replicatorFlag =>
+      DistributedData.withReplicatorMessageAdapter[Command, LWWMap[Long, AuctionInstance]] { replicator =>
 
-    ctx.log.info("Configurando AuctionSpawner")
-    ctx.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, ctx.self)
+        implicit val node: SelfUniqueAddress = DistributedData(ctx.system).selfUniqueAddress
+        val DataKey = LWWMapKey[Long, AuctionInstance]("auctionPool")
 
-    (0 to poolSize).foreach { n =>
-      //val behavior = AuctionActor(n,ctx.self)
-      var auctionActorServiceKey = ServiceKey[Command](s"AuctionActor$n")
-      startAuction(n,auctionActorServiceKey)
-      this.auctionPool += auctionPoolEntity.getAuctionInstance(n, auctionActorServiceKey)
+        var poolSize = ctx.system.settings.config.getInt("akka.cluster.auction-pool-size")
 
-      /*
-      val behavior = AuctionActor(n,auctionActorServiceKey)
-      //val behavior = AuctionActor()
-      println(s"Spawning auction $n...")
-      val ref : ActorRef[Command] = ctx.spawn(behavior, s"Auction$n")
-      println(s"Auction $n ok: $ref")
-      Behaviors.supervise(behavior).onFailure[Exception](SupervisorStrategy.restart)
-      this.auctionPool += auctionPoolEntity.getAuctionInstance(n, ref)*/
-    }
+        ctx.log.info("Configurando AuctionSpawner")
+        ctx.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, ctx.self)
 
-    auctionPoolEntity.set(this.auctionPool)
-
-    Behaviors.receiveMessage {
-      case GetAuctions(replyTo) =>
-        //replyTo ! Auctions(auctions)
-        Behaviors.same
-      case DeleteAuction(auctionId, replyTo) =>
-        var auctionInstance = auctionPoolEntity.getAuctionById(auctionId)
-        if(auctionInstance!=None) {
-           //auctionInstance.head.getAuction() ! AuctionActor.DeleteAuction(replyTo)
-          Util.getOneActor(ctx,auctionInstance.head.auctionActorServiceKey) ! AuctionActor.DeleteAuction(replyTo)
+        /*
+        (0 to poolSize).foreach { n =>
+          //val behavior = AuctionActor(n,ctx.self)
+          var auctionActorServiceKey = ServiceKey[Command](s"AuctionActor$n")
+          startAuctionNode(n, auctionActorServiceKey)
+          this.auctionPool += auctionPoolEntity.getAuctionInstance(n, auctionActorServiceKey)
         }
-        Behaviors.same
-      case CreateAuction(auctionId,newAuction, replyTo) =>
-        var auctionInstance = auctionPoolEntity.getFreeAuction(auctionId,replyTo)
-        if(auctionInstance!=null)
-          //auctionActor ! AuctionActor.StartAuction(auctionId,newAuction,replyTo)
-        Util.getOneActor(ctx,auctionInstance.auctionActorServiceKey) ! AuctionActor.StartAuction(auctionId,newAuction,replyTo)
-        Behaviors.same
-      case MakeBid(auctionId,newBid,replyTo) =>
-        var auctionInstance = auctionPoolEntity.getAuctionById(auctionId)
-        if(auctionInstance != None) {
-          //auctionActor.head.getAuction() ! AuctionActor.MakeBid(newBid,replyTo)
-          Util.getOneActor(ctx,auctionInstance.head.auctionActorServiceKey) ! AuctionActor.MakeBid(newBid,replyTo)
-        } else {
-          replyTo ! s"Subasta no encontrada: ${newBid.auctionId}"
+        */
+
+        //auctionPoolEntity.set(this.auctionPool)
+        def createAuction(data: LWWMap[Long, AuctionInstance], auctionId: String,newAuction:Auction ,replyTo: ActorRef[String]): LWWMap[Long, AuctionInstance] = {
+          if (data.size < poolSize) {
+            //Instancio un nodo, creo un actor y le asigno la nueva subasta
+            var index : Long = data.size+1
+            var auctionActorServiceKey = ServiceKey[Command](s"AuctionActor$index")
+            startAuctionNode(data.size+1, auctionActorServiceKey)
+            Thread.sleep(3000) //TODO reemplazar por mensaje sincrónico
+            Util.getOneActor(ctx, auctionActorServiceKey) ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
+            var auctionInstance = new AuctionInstance(index,auctionId,false,auctionActorServiceKey)
+            //auctionPoolEntity.getAuctionInstance(index, auctionActorServiceKey)
+            //auctionInstance.setIsFree(false)
+            data :+ (index -> auctionInstance)
+          } else {
+            //Busco una instancia libre y le asigno la subasta
+            //Si no hay subastas libres, tiro
+            data.entries.values.find(auctionInstance => auctionInstance.isFree) match {
+              case Some(someAuctionInstance) => {
+                Util.getOneActor(ctx, someAuctionInstance.auctionActorServiceKey) ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
+                someAuctionInstance.setIsFree(false)
+                data
+              }
+              case None => {
+                replyTo ! "No hay instancias libres"
+                data
+              }
+            }
+          }
         }
-        Behaviors.same
-      case FreeAuction(id) =>
-        auctionPoolEntity.freeAuction(id)
-        Behaviors.same
+
+        Behaviors.receiveMessage {
+          case GetAuctions(replyTo) =>
+            Behaviors.same
+          case DeleteAuction(auctionId, replyTo) =>
+            println("Cancel Auction...")
+            replicator.askGet(
+              askReplyTo => Get(DataKey, readMajority, askReplyTo),
+              rsp => InternalDeleteAuctionResponse(auctionId, replyTo, rsp)
+            )
+            Behaviors.same
+          case InternalDeleteAuctionResponse(auctionId, replyTo, rsp) =>
+            rsp match {
+              case g @ GetSuccess(DataKey) => {
+                g.get(DataKey).entries.values.toSet.find(auctionInstance =>
+                auctionInstance.id==auctionId) match {
+                  case Some(someAuctionInstance) => {
+                    var auctionActor = Util.getOneActor(ctx, someAuctionInstance.auctionActorServiceKey)
+                    auctionActor ! AuctionActor.DeleteAuction(replyTo)
+                  }
+                  case None => replyTo ! s"Error intentando cancelar Auction $auctionId. Auction no encontrado"
+                }
+              }
+              case _ => replyTo ! s"Error intentando cancelar Auction $auctionId. Error de sistema"
+            }
+            Behaviors.same
+          case CreateAuction(auctionId, newAuction, replyTo) =>
+            println("Create Auction...")
+            replicator.askUpdate(
+              askReplyTo => Update(DataKey, LWWMap.empty[Long, AuctionInstance], writeMajority, askReplyTo) {
+                auctionPool => createAuction(auctionPool, auctionId,newAuction, replyTo)
+              },
+              InternalCreateAuctionResponse.apply)
+            Behaviors.same
+          case MakeBid(auctionId, newBid, replyTo) =>
+            /*
+            var auctionInstance = auctionPoolEntity.getAuctionById(auctionId)
+            if (auctionInstance != None) {
+              Util.getOneActor(ctx, auctionInstance.head.auctionActorServiceKey) ! AuctionActor.MakeBid(newBid, replyTo)
+            } else {
+              replyTo ! s"Subasta no encontrada: ${newBid.auctionId}"
+            }*/
+            Behaviors.same
+          case FreeAuction(id) =>
+            //auctionPoolEntity.freeAuction(id)
+            Behaviors.same
+        }
+
+
+        //
+      }
     }
   }
 
-  def startAuction(index: Long,auctionActorServiceKey : ServiceKey[Command]): Unit = {
 
+
+  def startAuctionNode(index: Long, auctionActorServiceKey: ServiceKey[Command]): Unit = {
     val config = ConfigFactory
-      .parseString(s"""
+      .parseString(
+        s"""
         akka.remote.artery.canonical.port=0
         akka.cluster.roles = [${Roles.Auction.roleName}]
         """)
       .withFallback(ConfigFactory.load("transformation"))
-
-    val system = ActorSystem[Nothing](RootAuctionBehavior(index,auctionActorServiceKey), "TP" , config)
+    val system = ActorSystem[Nothing](RootAuctionBehavior(index, auctionActorServiceKey), "TP", config)
     system.log.info(s"${Roles.Auction.roleName} (Role) available at ${system.address}")
-
   }
 
 }
 
 object RootAuctionBehavior {
-  import akka.actor.ActorRef
-  def apply(index: Long,auctionActorServiceKey : ServiceKey[Command]) : Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
+  def apply(index: Long, auctionActorServiceKey: ServiceKey[Command]): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
     val cluster = Cluster(context.system)
-    val replicator: ActorRef = DistributedData(context.system).replicator
-    context.spawn(AuctionActor(index,auctionActorServiceKey), s"Auction$index")
+    val replicator: ActorRef[Replicator.Command] = DistributedData(context.system).replicator
+    context.spawn(AuctionActor(index, auctionActorServiceKey), s"Auction$index")
     Behaviors.empty
   }
 }

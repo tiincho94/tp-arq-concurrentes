@@ -1,13 +1,13 @@
 package iasc.g4.actors
 
-import akka.actor.typed.delivery.internal.ProducerControllerImpl.InternalCommand
+//import akka.actor.typed.delivery.internal.ProducerControllerImpl.InternalCommand
 
 import scala.concurrent.duration._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import iasc.g4.CborSerializable
-import iasc.g4.models.Models.{Buyer, Buyers, Command, OperationPerformed}
+import iasc.g4.models.Models.{Buyer, Buyers, Command, InternalCommand, OperationPerformed}
 import akka.cluster.ddata.{Flag, LWWMap, LWWMapKey, ReplicatedData, SelfUniqueAddress}
 import akka.cluster.ddata.Replicator._
 import akka.cluster.ddata.typed.scaladsl.DistributedData
@@ -32,7 +32,6 @@ object BuyersSubscriptorActor {
 
   final case class CreateBuyer(buyer: Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
-  private sealed trait InternalCommand extends Command
   private case class InternalUpdateResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
   private case class InternalBuyersGetResponse(replyTo: ActorRef[Buyers], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
 

@@ -73,7 +73,7 @@ object App{
       startup(Roles.AuctionSpawner.roleName, 0)
       startup(Roles.BuyersSuscriptor.roleName, 0)
       startup(Roles.NotifierSpawner.roleName, 0)
-      Thread.sleep(3000)
+      Thread.sleep(4000)
       startup(Roles.HTTPServer.roleName, 0)
     } else {
       require(args.length == 2, s"Usage: role port")
