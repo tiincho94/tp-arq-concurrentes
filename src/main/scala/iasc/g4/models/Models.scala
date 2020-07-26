@@ -21,7 +21,7 @@ object Models {
   final case class Auction(id:String, basePrice: Double, duration: Long, tags: Set[String], article: String)
   final case class Auctions(auctions: Set[Auction])
   final case class Bid(auctionId:String, buyerName : String, price : Double)
-  final case class AuctionInstance(index :Long, id:String,  isFree:Boolean, auctionActorServiceKey: ServiceKey[Command])
+  final case class AuctionInstance(index :Long, id:String,  isFree:Boolean)
 
   import DefaultJsonProtocol._
   implicit val buyerJsonFormat: RootJsonFormat[Buyer] = jsonFormat3(Buyer)
@@ -29,39 +29,5 @@ object Models {
   implicit val auctionJsonFormat: RootJsonFormat[Auction] = jsonFormat5(Auction)
   implicit val auctionsJsonFormat: RootJsonFormat[Auctions] = jsonFormat1(Auctions)
   implicit val bidJsonFormat: RootJsonFormat[Bid] = jsonFormat3(Bid)
-  //implicit val auctionInstance: RootJsonFormat[AuctionInstance] = jsonFormat4(AuctionInstance)
-}
-
-
-class AuctionInstance(var index :Long, var id:String, var isFree:Boolean, var auctionActorServiceKey: ServiceKey[Command]) extends CborSerializable {
-
-  //var index :Long
-  //var id:String
-  //var isFree:Boolean
-  //var auctionActorServiceKey: ServiceKey[Command]
-
-  def setIndex(_index:Long):Unit = {
-    this.index = _index
-  }
-  def getIndex(): Long ={
-    return index
-  }
-  def setId(_id:String):Unit = {
-    this.id = _id
-  }
-  def getId(): String ={
-    return id
-  }
-  def setAuctionKey(_auctionActorServiceKey: ServiceKey[Command]) = {
-    this.auctionActorServiceKey = _auctionActorServiceKey
-  }
-  def getAuctionKey(): ServiceKey[Command] ={
-    return auctionActorServiceKey
-  }
-  def setIsFree(_isFree : Boolean) = {
-    this.isFree = _isFree
-  }
-  def getIsFree() : Boolean = {
-    return isFree
-  }
+  implicit val auctionInstance: RootJsonFormat[AuctionInstance] = jsonFormat3(AuctionInstance)
 }

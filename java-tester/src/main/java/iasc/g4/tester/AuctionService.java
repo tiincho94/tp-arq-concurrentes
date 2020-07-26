@@ -33,7 +33,7 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	@Value("${auction.server:http://localhost:8081}")
 	private String serverHost;
 	
-	@Value("${client.name}")
+	@Value("${client.name:default}")
 	private String name;
 
 	private String ip;
