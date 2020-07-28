@@ -49,12 +49,13 @@ object AuctionSpawnerActor {
   final case class InternalDeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
   private case class InternalDeleteAuctionResponse(auctionId:String, replyTo: ActorRef[String], rsp: GetResponse[LWWMap[Long, AuctionInstance]]) extends InternalCommand
   private case class InternalCreateAuctionResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
-
-
+  private case class InternalMakeBidResponse(auctionId:String, newBid: Bid,replyTo: ActorRef[String], rsp: GetResponse[LWWMap[Long, AuctionInstance]]) extends InternalCommand
+  private case class InternalFreeAuctionResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
 
   private val timeout = 3.seconds
   private val readMajority = ReadMajority(timeout)
   private val writeMajority = WriteMajority(timeout)
+
 
   // instanciación del objeto
   def apply(): Behavior[Command] = Behaviors.setup { ctx =>
@@ -69,16 +70,18 @@ object AuctionSpawnerActor {
         ctx.log.info("Configurando AuctionSpawner")
         ctx.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, ctx.self)
 
-        /*
-        (0 to poolSize).foreach { n =>
-          //val behavior = AuctionActor(n,ctx.self)
-          var auctionActorServiceKey = ServiceKey[Command](s"AuctionActor$n")
-          startAuctionNode(n, auctionActorServiceKey)
-          this.auctionPool += auctionPoolEntity.getAuctionInstance(n, auctionActorServiceKey)
+        def freeAuction(auctionId: String,data: LWWMap[Long, AuctionInstance]): LWWMap[Long, AuctionInstance] = {
+          data.entries.values.find(auctionInstance => auctionInstance.id==auctionId) match {
+            case Some(someAuctionInstance) => {
+              var newAuctionInstance = new AuctionInstance(someAuctionInstance.index,"",true)
+              //data.put(node,newAuctionInstance.index,newAuctionInstance)
+              val a = data.remove(node,newAuctionInstance.index)
+              a :+ (newAuctionInstance.index -> newAuctionInstance)
+            }
+            case _ => data
+          }
         }
-        */
 
-        //auctionPoolEntity.set(this.auctionPool)
         def createAuction(data: LWWMap[Long, AuctionInstance], auctionId: String,newAuction:Auction ,replyTo: ActorRef[String]): LWWMap[Long, AuctionInstance] = {
           if (data.size < poolSize) {
             //Instancio un nodo, creo un actor y le asigno la nueva subasta
@@ -88,8 +91,6 @@ object AuctionSpawnerActor {
             Thread.sleep(3000) //TODO reemplazar por mensaje sincrónico
             Util.getOneActor(ctx, auctionActorServiceKey) ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
             var auctionInstance = new AuctionInstance(index,auctionId,false)
-            //auctionPoolEntity.getAuctionInstance(index, auctionActorServiceKey)
-            //auctionInstance.setIsFree(false)
             data :+ (index -> auctionInstance)
           } else {
             //Busco una instancia libre y le asigno la subasta
@@ -97,7 +98,8 @@ object AuctionSpawnerActor {
             data.entries.values.find(auctionInstance => auctionInstance.isFree) match {
               case Some(someAuctionInstance) => {
                 Util.getOneActor(ctx, generateAuctionServiceKey(someAuctionInstance.index)) ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
-                data :+ (someAuctionInstance.index -> AuctionInstance(someAuctionInstance.index, someAuctionInstance.id, false))
+                val a = data.remove(node,someAuctionInstance.index)
+                a :+ (someAuctionInstance.index -> AuctionInstance(someAuctionInstance.index, auctionId, false))
               }
               case None => {
                 replyTo ! "No hay instancias libres"
@@ -145,17 +147,40 @@ object AuctionSpawnerActor {
           case InternalCreateAuctionResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
 
           case MakeBid(auctionId, newBid, replyTo) =>
-            /*
-            var auctionInstance = auctionPoolEntity.getAuctionById(auctionId)
-            if (auctionInstance != None) {
-              Util.getOneActor(ctx, auctionInstance.head.auctionActorServiceKey) ! AuctionActor.MakeBid(newBid, replyTo)
-            } else {
-              replyTo ! s"Subasta no encontrada: ${newBid.auctionId}"
-            }*/
+            println("Make Bid...")
+            replicator.askGet(
+              askReplyTo => Get(DataKey, readMajority, askReplyTo),
+              rsp => InternalMakeBidResponse(auctionId, newBid,replyTo, rsp)
+            )
             Behaviors.same
-          case FreeAuction(id) =>
+          case InternalMakeBidResponse(auctionId, newBid,replyTo, rsp) =>
+            rsp match {
+              case g @ GetSuccess(DataKey) => {
+                g.get(DataKey).entries.values.toSet.find(auctionInstance =>
+                  auctionInstance.id==auctionId) match {
+                  case Some(someAuctionInstance) => {
+                    var auctionActor = Util.getOneActor(ctx, generateAuctionServiceKey(someAuctionInstance.index))
+                    auctionActor ! AuctionActor.MakeBid(newBid, replyTo)
+                  }
+                  case None => replyTo ! s"Error intentando realizar una oferta en subasta: $auctionId. Auction no encontrado"
+                }
+              }
+              case _ => replyTo ! s"Error intentando realizar una oferta en subasta: $auctionId. Error de sistema"
+            }
+            Behaviors.same
+          case FreeAuction(auctionId) =>
             //auctionPoolEntity.freeAuction(id)
+            println("Free Auction...")
+            replicator.askUpdate(
+              askReplyTo => Update(DataKey, LWWMap.empty[Long, AuctionInstance], writeMajority, askReplyTo) {
+                auctionPool => freeAuction(auctionId,auctionPool)
+              },
+              InternalFreeAuctionResponse.apply)
             Behaviors.same
+          case InternalFreeAuctionResponse(_: UpdateResponse[_]) => Behaviors.same
+          case InternalFreeAuctionResponse(_: UpdateTimeout[_]) => Behaviors.same
+          case InternalFreeAuctionResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
+
         }
 
 

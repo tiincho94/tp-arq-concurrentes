@@ -58,6 +58,18 @@ private class AuctionActor(
   context.system.receptionist ! Receptionist.Register(auctionActorServiceKey, context.self)
   println("Registrado")
 
+  def selfResetVariables() = {
+    this.id = ""
+    this.price = 0.0
+    this.duration = 0L
+    this.tags = Set[String]()
+    this.article = ""
+    this.currentWinner = null
+    this.buyers = Set[String]()
+    this.auction = null
+    this.timeout = null
+  }
+
   override def onMessage(msg: Command): Behavior[Command] =
     msg match {
       case StartAuction(auctionId,newAuction,replyTo) =>
@@ -87,6 +99,7 @@ private class AuctionActor(
           case _ => {
             selfNotifyWinner() //TODO
             selfNotifyLosers(currentWinner) //TODO
+            selfResetVariables()
           };
         }
         //this.auctionSpawner ! FreeAuction(this.id)
