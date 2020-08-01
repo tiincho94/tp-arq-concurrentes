@@ -5,6 +5,7 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.{AbstractBehavior, Behaviors}
 import akka.cluster.ddata.ReplicatedData
 import akka.cluster.ddata.Replicator.{UpdateFailure, UpdateResponse, UpdateSuccess, UpdateTimeout}
+import akka.http.scaladsl.model.DateTime
 import iasc.g4.actors.AuctionActor._
 import iasc.g4.actors.AuctionSpawnerActor.{CreateAuction, FreeAuction, InternalCreateAuctionResponse, InternalDeleteAuctionResponse, InternalMakeBidResponse, readMajority, writeMajority}
 import iasc.g4.models.Models.{Auction, AuctionActorState, AuctionInstance, Bid, Buyer, Buyers, Command, InternalCommand, OperationPerformed}
@@ -169,12 +170,12 @@ private class AuctionActor(
           Behaviors.same
         //End Delete Auction
       }
-
     }
 
   def startAuction(auctionStatePool:LWWMap[String, AuctionActorState], auctionId:String, newAuction: Auction) : LWWMap[String, AuctionActorState] = {
     val a = auctionStatePool.remove(node,auctionId)
-    a :+ (auctionId -> AuctionActorState(newAuction, newAuction.basePrice, "",Set[String]()))
+    var endTime : DateTime = DateTime.now
+    a :+ (auctionId -> AuctionActorState(newAuction, newAuction.basePrice, "",Set[String](),endTime))
   }
 
   def endAuction(auctionStatePool:LWWMap[String, AuctionActorState], auctionId:String): LWWMap[String, AuctionActorState] = {
