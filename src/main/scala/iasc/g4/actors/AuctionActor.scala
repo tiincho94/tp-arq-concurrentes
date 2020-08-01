@@ -111,7 +111,10 @@ private class AuctionActor(
           Behaviors.same
         case InternalStartAuctionResponse(_: UpdateSuccess[_],newAuction,replyTo) => {
           replyTo ! "Auction index: " + this.index.toString()
-          getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewAuction(newAuction)
+          getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+            case Some(actor) => actor ! NotifyNewAuction(newAuction)
+            case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
+          }
           Behaviors.same
         }
         case InternalStartAuctionResponse(_: UpdateTimeout[_],newAuction,replyTo) => Behaviors.same
@@ -188,25 +191,33 @@ private class AuctionActor(
     }
 
   def notifyWinner() = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyWinner(this.auctionActorState.auction, this.auctionActorState.currentWinner)
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+      case Some(actor) => actor ! NotifyWinner(this.auctionActorState.auction, this.auctionActorState.currentWinner)
+      case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
+    }
   }
 
   def notifyLosers(currentWinner : String) = {
     val losers = this.auctionActorState.buyers.filter(b => ! b.equals(currentWinner))
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyLosers(this.auctionActorState.auction, losers)
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+      case Some(actor) => actor ! NotifyLosers(this.auctionActorState.auction, losers)
+      case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
+    }
   }
 
   def selfNotifyCancelledAuction() = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyCancellation(auction, buyers)
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+      case Some(actor) => actor ! NotifyCancellation(auction, buyers)
+      case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
+    }
   }
 
   def selfNotifyNewPrice(newPrice:Double) = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewPrice(auction, buyers, newPrice)
+    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+      case Some(actor) => actor ! NotifyNewPrice(auction, buyers, newPrice)
+      case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
+    }
   }
-
-  /*def selfNotifyNewAuction(auctionId:String) = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) ! NotifyNewAuction(auction)
-  }*/
 
   def freeAuction(auctionId:String) = {
     var message = "NotifierSpawner no disponible"

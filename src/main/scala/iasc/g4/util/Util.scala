@@ -5,7 +5,7 @@ import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.ActorContext
-import akka.http.impl.util.Util
+import scala.concurrent.duration._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.ActorMaterializer
@@ -23,6 +23,10 @@ object Util {
   implicit val clientSystem = ActorSystem()
   implicit val materializer = ActorMaterializer()
   implicit val executionContext = clientSystem.dispatcher
+  /**
+   * tiempo de espera a que aparezca un actor en el receptionist
+   */
+  val actorWait = 2000
 
   /**
    * @param ctx
@@ -52,10 +56,20 @@ object Util {
    * @tparam T
    * @return
    */
-  def getOneActor[T](ctx: ActorContext[_], key: ServiceKey[T]): ActorRef[T] = {
-    val actors : Set[ActorRef[T]] = Await.result(getActors(ctx, key), getTimeout(ctx).duration)
-    if (actors.isEmpty) throw new IllegalStateException(s"Actor no disponible para key ${key.id}")
-    actors.head
+  def getOneActor[T](ctx: ActorContext[_], key: ServiceKey[T], retries: Int = 0): Option[ActorRef[T]] = {
+    var triesLeft = retries
+    while(triesLeft >= 0) {
+      val actors : Set[ActorRef[T]] = Await.result(getActors(ctx, key), getTimeout(ctx).duration)
+      if (!actors.isEmpty) {
+        return Option(actors.head)
+      } else if (triesLeft > 0) {
+        ctx.log.debug(s"Esperando por un actor para la key ${key.id}...")
+        Thread.sleep(actorWait)
+      }
+      triesLeft-=1;
+    }
+    ctx.log.debug(s"No se pudo obtener un actor para la key ${key.id}")
+    Option.empty
   }
 
   def makeHttpCall(_uri : String):Unit = {

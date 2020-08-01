@@ -97,7 +97,10 @@ class Routes(context: ActorContext[_]) {
     }
 
     def cancelAuction(auctionId: String): Future[String] = {
-      getOneActor(context,AuctionSpawnerActor.AuctionSpawnerServiceKey).ask(DeleteAuction(auctionId,_))(timeout, context.system.scheduler)
+      getOneActor(context,AuctionSpawnerActor.AuctionSpawnerServiceKey) match {
+        case Some(actor) => actor.ask(DeleteAuction(auctionId,_))(timeout, context.system.scheduler)
+        case None => Future("No se pudo cancelar el auction. Error obteniendo ref al Auction Spawner :(")
+      }
     }
 
 //    val routes: Route = pathPrefix("auctions") {

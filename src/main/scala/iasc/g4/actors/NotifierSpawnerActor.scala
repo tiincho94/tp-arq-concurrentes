@@ -73,15 +73,31 @@ object NotifierSpawnerActor {
     }
 
   def getBuyers(ctx: ActorContext[_], auction: Auction): Buyers = {
-    val actor = getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey)
-    val f = actor.ask(GetBuyers(auction.tags, _))(getTimeout(ctx), ctx.system.scheduler)
-    Await.result(f, getTimeout(ctx).duration)
+    getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey) match {
+      case Some(actor) => {
+        val f = actor.ask(GetBuyers(auction.tags, _))(getTimeout(ctx), ctx.system.scheduler)
+        Await.result(f, getTimeout(ctx).duration)
+      }
+      case None => {
+        ctx.log.debug("No se pudo obtener ref al BuyerSuscriptor :(")
+        Buyers(Set[Buyer]())
+      }
+    }
+
   }
 
   def getBuyer(ctx: ActorContext[_], name: String): Option[Buyer] = {
-    val actor = getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey)
-    val f = actor.ask(GetBuyer(name, _))(getTimeout(ctx), ctx.system.scheduler)
-    Await.result(f, getTimeout(ctx).duration)
+    getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey) match {
+      case Some(actor) => {
+        val f = actor.ask(GetBuyer(name, _))(getTimeout(ctx), ctx.system.scheduler)
+        Await.result(f, getTimeout(ctx).duration)
+      }
+      case None => {
+        ctx.log.debug("No se pudo obtener ref al BuyerSuscriptor :(")
+        null
+      }
+    }
+
   }
 
   def getBuyerFromSet(buyerName: String, buyers: Set[Buyer]): Buyer ={
