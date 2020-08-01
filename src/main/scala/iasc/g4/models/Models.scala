@@ -1,5 +1,6 @@
 package iasc.g4.models
 
+import akka.actor.Cancellable
 import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.ServiceKey
 import iasc.g4.CborSerializable
@@ -22,6 +23,7 @@ object Models {
   final case class Auctions(auctions: Set[Auction])
   final case class Bid(auctionId:String, buyerName : String, price : Double)
   final case class AuctionInstance(index :Long, id:String,  isFree:Boolean)
+  final case class AuctionActorState(auction : Auction , price : Double, currentWinner: String ,buyers : Set[String])
 
   import DefaultJsonProtocol._
   implicit val buyerJsonFormat: RootJsonFormat[Buyer] = jsonFormat3(Buyer)

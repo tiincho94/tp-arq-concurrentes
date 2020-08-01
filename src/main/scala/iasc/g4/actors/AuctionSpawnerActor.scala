@@ -21,12 +21,7 @@ import iasc.g4.util.Util
  */
 object AuctionSpawnerActor {
 
-  //  TODO Revisar Escenario 7 de la consigna -> Debería no ser fijo, primer implementación sería crear
-  //  libremente nuevas y en una segunda meter lo que pide el escenario 7
-
   trait AuctionSpawnerCommand extends Command
-
-  var auctionPool = Set[AuctionInstance]()
   val AuctionSpawnerServiceKey = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
 
   /**
@@ -142,7 +137,7 @@ object AuctionSpawnerActor {
               },
               InternalCreateAuctionResponse.apply)
             Behaviors.same
-          case InternalCreateAuctionResponse(_: UpdateResponse[_]) => Behaviors.same
+          case InternalCreateAuctionResponse(_: UpdateSuccess[_]) => Behaviors.same
           case InternalCreateAuctionResponse(_: UpdateTimeout[_]) => Behaviors.same
           case InternalCreateAuctionResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
 
