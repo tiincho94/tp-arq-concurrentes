@@ -73,11 +73,6 @@ private class AuctionActor(
   context.system.receptionist ! Receptionist.Register(auctionActorServiceKey, context.self)
   println(s"AuctionActor Registrado con índice $index")
 
-  def resetVariables() = {
-    this.id = null
-    this.auctionActorState = null
-  }
-
   override def onMessage(msg: Command): Behavior[Command] =
     Behaviors.withTimers[Command] { timers =>
       DistributedData.withReplicatorMessageAdapter[Command, LWWMap[String, AuctionActorState]] { replicator =>
@@ -196,7 +191,6 @@ private class AuctionActor(
               case _ => {
                 notifyWinner() //TODO
                 notifyLosers(this.auctionActorState.currentWinner) //TODO
-                resetVariables()
               };
             }
             //this.auctionSpawner ! FreeAuction(this.id)
@@ -232,11 +226,10 @@ private class AuctionActor(
             replyTo ! s"Subasta ${this.id} cancelada"
             //this.auctionSpawner ! FreeAuction(this.id)
             freeAuction(this.id)
-            resetVariables()
             Behaviors.same
           }
           case InternalCancelAuctionResponse(_: UpdateTimeout[_], auctionId) => {
-            resetVariables()
+            freeAuction(this.id)
             Behaviors.same
           }
           case InternalCancelAuctionResponse(e: UpdateFailure[_], auctionId) => throw new IllegalStateException("Unexpected failure: " + e)
@@ -309,7 +302,11 @@ private class AuctionActor(
 
   def freeAuction(auctionId:String) = {
     getOneActor(context, AuctionSpawnerActor.AuctionSpawnerServiceKey) match {
-      case Some(actor) => actor ! FreeAuction(auctionId)
+      case Some(actor) => {
+        actor ! FreeAuction(auctionId)
+        this.id = null
+        this.auctionActorState = null
+      }
       case None => context.log.debug("No se pudo obtener ref al AuctionSpawner :(")
     }
   }
