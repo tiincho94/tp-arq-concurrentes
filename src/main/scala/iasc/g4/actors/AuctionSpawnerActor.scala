@@ -39,7 +39,7 @@ object AuctionSpawnerActor {
   final case class CreateAuction(auctionId: String, newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
   final case class MakeBid(auctionId: String, newBid: Bid, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
   final case class FreeAuction(id: String) extends AuctionSpawnerCommand
-  final case class NewAuctionCreated(index: Long, auctionId: String, newAuction: Auction, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  final case class NewAuctionCreated(index: Long, auctionId: String, newAuction: Auction, createNode: Boolean, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
 
   //Mensajes internos
   final case class InternalDeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
@@ -87,17 +87,13 @@ object AuctionSpawnerActor {
             .withFallback(ConfigFactory.load("transformation"))
           val system = ActorSystem[Nothing](RootAuctionBehavior(index), "TP", config)
           system.log.info(s"${Roles.Auction.roleName} (Role) available at ${system.address}")
-          Util.getOneActor(auctionSpawnerContext, generateAuctionServiceKey(index), 3) match {
-            case Some(actor) => actor ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
-            case None => replyTo ! "No se pudo obtener referencia al AuctionActor creado :("
-          }
         }
 
         def createAuction(data: LWWMap[Long, AuctionInstance], auctionId: String, newAuction:Auction ,replyTo: ActorRef[String], onCreateRef: ActorRef[Command]): LWWMap[Long, AuctionInstance] = {
           if (data.size < poolSize) {
             //Instancio un nodo, creo un actor y le asigno la nueva subasta
             var index : Long = data.size+1
-            onCreateRef ! NewAuctionCreated(index, auctionId, newAuction, replyTo)
+            onCreateRef ! NewAuctionCreated(index, auctionId, newAuction, true, replyTo)
             var auctionInstance = new AuctionInstance(index,auctionId,false)
             data :+ (index -> auctionInstance)
           } else {
@@ -105,11 +101,7 @@ object AuctionSpawnerActor {
             //Si no hay subastas libres, tiro
             data.entries.values.find(auctionInstance => auctionInstance.isFree) match {
               case Some(someAuctionInstance) => {
-                //TODO: este código se ejecuta desde el replicator y le pasa el contexto del auctionSpawner
-                Util.getOneActor(auctionSpawnerContext, generateAuctionServiceKey(someAuctionInstance.index)) match {
-                  case Some(actor) => actor ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
-                  case None => replyTo ! "No se pudo obtener referencia a la instancia asignada :("
-                }
+                onCreateRef ! NewAuctionCreated(someAuctionInstance.index, auctionId, newAuction, false, replyTo)
                 val a = data.remove(node,someAuctionInstance.index)
                 a :+ (someAuctionInstance.index -> AuctionInstance(someAuctionInstance.index, auctionId, false))
               }
@@ -161,8 +153,14 @@ object AuctionSpawnerActor {
           case InternalCreateAuctionResponse(_: UpdateSuccess[_]) => Behaviors.same
           case InternalCreateAuctionResponse(_: UpdateTimeout[_]) => Behaviors.same
           case InternalCreateAuctionResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
-          case NewAuctionCreated(index, auctionId, newAuction, replyTo) => {
-            startAuctionNode(index, auctionId, newAuction, replyTo)
+          case NewAuctionCreated(index, auctionId, newAuction, createNode, replyTo) => {
+            if (createNode) {
+              startAuctionNode(index, auctionId, newAuction, replyTo)
+            }
+            Util.getOneActor(auctionSpawnerContext, generateAuctionServiceKey(index), 3) match {
+              case Some(actor) => actor ! AuctionActor.StartAuction(auctionId, newAuction, replyTo)
+              case None => replyTo ! "No se pudo obtener referencia al AuctionActor creado :("
+            }
             Behaviors.same
           }
           case MakeBid(auctionId, newBid, replyTo) =>

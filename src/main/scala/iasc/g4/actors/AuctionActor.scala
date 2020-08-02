@@ -164,6 +164,7 @@ private class AuctionActor(
                   replyTo ! s"El nuevo precio es: |${auctionActorState.price}| y el ganador por el momento es |${auctionActorState.currentWinner}|"
                 }
               }
+              case None => replyTo ! s"No se pudo encontrar la subaste ${newBid.auctionId} :("
             }
             Behaviors.same
           case InternalNotifyNewPrice(newBid, replyTo, NotFound(DataKey, _)) => Behaviors.same
