@@ -77,7 +77,7 @@ class Routes(context: ActorContext[_]) {
     }
 
     def makeBid(newBid:Bid):Future[String] = {
-      getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
+      getActors(context, AuctionSpawnerActor.serviceKey).flatMap(actors =>
         if (!actors.isEmpty) {
           actors.head.ask(MakeBid(newBid.auctionId,newBid,_)) (timeout, context.system.scheduler)
         } else {
@@ -87,7 +87,7 @@ class Routes(context: ActorContext[_]) {
     }
 
     def createAuction(newAuction: Auction): Future[String] =  {
-      getActors(context, AuctionSpawnerActor.AuctionSpawnerServiceKey).flatMap(actors =>
+      getActors(context, AuctionSpawnerActor.serviceKey).flatMap(actors =>
         if (!actors.isEmpty) {
           actors.head.ask(CreateAuction(newAuction.id,newAuction,_))(timeout, context.system.scheduler)
         } else {
@@ -97,7 +97,7 @@ class Routes(context: ActorContext[_]) {
     }
 
     def cancelAuction(auctionId: String): Future[String] = {
-      getOneActor(context,AuctionSpawnerActor.AuctionSpawnerServiceKey) match {
+      getOneActor(context,AuctionSpawnerActor.serviceKey) match {
         case Some(actor) => actor.ask(DeleteAuction(auctionId,_))(timeout, context.system.scheduler)
         case None => Future("No se pudo cancelar el auction. Error obteniendo ref al Auction Spawner :(")
       }

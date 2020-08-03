@@ -1,6 +1,5 @@
 package iasc.g4.actors
 
-import akka.actor.Cancellable
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.{AbstractBehavior, Behaviors}
 import akka.cluster.ddata.ReplicatedData
@@ -9,7 +8,6 @@ import akka.http.scaladsl.model.DateTime
 import iasc.g4.actors.AuctionActor._
 import iasc.g4.actors.AuctionSpawnerActor.FreeAuction
 import iasc.g4.models.Models.{Auction, AuctionActorState, Bid, Command, InternalCommand}
-//import iasc.g4.util.Util.{getActors, _}
 import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.ActorContext
@@ -21,7 +19,6 @@ import iasc.g4.actors.NotifierSpawnerActor._
 import iasc.g4.util.Util._
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 
 /**
@@ -57,17 +54,17 @@ object AuctionActor {
 }
 
 private class AuctionActor(
-                            context: ActorContext[Command] ,
-                            index:Long,
-                            auctionActorServiceKey : ServiceKey[Command]
+                            context: ActorContext[Command],
+                            index: Long,
+                            auctionActorServiceKey: ServiceKey[Command]
                           ) extends AbstractBehavior[Command](context) {
 
 
-  var id : String = null
-  var auctionActorState: AuctionActorState = null
+  var id : String = _
+  var auctionActorState: AuctionActorState = _
 
   implicit val node: SelfUniqueAddress = DistributedData(context.system).selfUniqueAddress
-  val DataKey = LWWMapKey[String, AuctionActorState]("auctionStatePool")
+  val DataKey: LWWMapKey[String, AuctionActorState] = LWWMapKey[String, AuctionActorState]("auctionStatePool")
 
   private val readMajority = ReadMajority(getTimeout(context).duration)
   private val writeMajority = WriteMajority(getTimeout(context).duration)
@@ -90,16 +87,16 @@ private class AuctionActor(
           case InternalCheckAuctionEnded(auctionId, g @ GetSuccess(DataKey)) =>
             val data = g.get(DataKey)
             data.get(auctionId) match {
-              case Some(auctionActorState) => {
+              case Some(auctionActorState) =>
                 if (DateTime.now >= auctionActorState.endTime){
                   println(s"Ending idx $index auction $id")
                   context.self ! EndAuction(auctionId)
                 }
-              } case None => {}
+              case None =>
             }
             Behaviors.same
-          case InternalCheckAuctionEnded(auctionId, NotFound(DataKey, _)) => Behaviors.same
-          case InternalCheckAuctionEnded(auctionId, GetFailure(DataKey, _)) => Behaviors.same
+          case InternalCheckAuctionEnded(_, NotFound(DataKey, _)) => Behaviors.same
+          case InternalCheckAuctionEnded(_, GetFailure(DataKey, _)) => Behaviors.same
           //End Check Auction Ended
 
 
@@ -123,16 +120,17 @@ private class AuctionActor(
               },
               InternalStartAuctionResponse.apply(_, newAuction, replyTo))
             Behaviors.same
-          case InternalStartAuctionResponse(_: UpdateSuccess[_], newAuction, replyTo) => {
-            replyTo ! "Auction index: " + this.index.toString()
+
+          case InternalStartAuctionResponse(_: UpdateSuccess[_], newAuction, replyTo) =>
+            replyTo ! s"Auction index: $index"
             getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
               case Some(actor) => actor ! NotifyNewAuction(newAuction)
               case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
             }
             Behaviors.same
-          }
-          case InternalStartAuctionResponse(_: UpdateTimeout[_], newAuction, replyTo) => Behaviors.same
-          case InternalStartAuctionResponse(e: UpdateFailure[_], newAuction, replyTo) => throw new IllegalStateException("Unexpected failure: " + e)
+
+          case InternalStartAuctionResponse(_: UpdateTimeout[_], _, _) => Behaviors.same
+          case InternalStartAuctionResponse(e: UpdateFailure[_], _, _) => throw new IllegalStateException("Unexpected failure: " + e)
           //End Start Auction
 
 
@@ -147,29 +145,28 @@ private class AuctionActor(
               },
               InternalMakeBidResponse.apply(_, newBid, replyTo))
             Behaviors.same
-          case InternalMakeBidResponse(_: UpdateSuccess[_], newBid, replyTo) => {
+          case InternalMakeBidResponse(_: UpdateSuccess[_], newBid, replyTo) =>
             replicator.askGet(
               askReplyTo => Get(DataKey, readMajority, askReplyTo),
               rsp => InternalNotifyNewPrice(newBid, replyTo,rsp)
             )
             Behaviors.same
-          }
-          case InternalMakeBidResponse(_: UpdateTimeout[_], newBid, replyTo) => Behaviors.same
-          case InternalMakeBidResponse(e: UpdateFailure[_], newBid, replyTo) => throw new IllegalStateException("Unexpected failure: " + e)
+
+          case InternalMakeBidResponse(_: UpdateTimeout[_], _, _) => Behaviors.same
+          case InternalMakeBidResponse(e: UpdateFailure[_], _, _) => throw new IllegalStateException("Unexpected failure: " + e)
           case InternalNotifyNewPrice(newBid, replyTo ,g @ GetSuccess(DataKey)) =>
             val data = g.get(DataKey)
             data.get(newBid.auctionId) match {
-              case Some(auctionActorState) => {
+              case Some(auctionActorState) =>
                 if(newBid.price == auctionActorState.price && newBid.buyerName == auctionActorState.currentWinner) {
                   notifyNewPrice(auctionActorState.auction, auctionActorState.buyers, auctionActorState.price)
                   replyTo ! s"El nuevo precio es: |${auctionActorState.price}| y el ganador por el momento es |${auctionActorState.currentWinner}|"
                 }
-              }
               case None => replyTo ! s"No se pudo encontrar la subaste ${newBid.auctionId} :("
             }
             Behaviors.same
-          case InternalNotifyNewPrice(newBid, replyTo, NotFound(DataKey, _)) => Behaviors.same
-          case InternalNotifyNewPrice(newBid, replyTo, GetFailure(DataKey, _)) => Behaviors.same
+          case InternalNotifyNewPrice(_, _, NotFound(DataKey, _)) => Behaviors.same
+          case InternalNotifyNewPrice(_, _, GetFailure(DataKey, _)) => Behaviors.same
           //End Make Bid
 
 
@@ -181,71 +178,65 @@ private class AuctionActor(
               askReplyTo => Update(DataKey, LWWMap.empty[String, AuctionActorState], writeMajority, askReplyTo) {
                 auctionStatePool => {
                   auctionStatePool.get(auctionId) match {
-                    case Some(someAuctionActorState) => {
+                    case Some(someAuctionActorState) =>
                       this.auctionActorState = someAuctionActorState
                       endAuction(auctionStatePool, auctionId)
-                    }
-                    case None => { auctionStatePool }
+                    case None => auctionStatePool
                   }
                 }
               },
               InternalEndAuctionResponse.apply(_, auctionId))
             Behaviors.same
-          case InternalEndAuctionResponse(_: UpdateSuccess[_], auctionId) => {
+          case InternalEndAuctionResponse(_: UpdateSuccess[_], _) =>
             this.auctionActorState.currentWinner match {
-              case null => {}
-              case _ => {
-                notifyWinner() //TODO
-                notifyLosers(this.auctionActorState.currentWinner) //TODO
-              };
+              case null =>
+              case _ =>
+                notifyWinner()
+                notifyLosers(this.auctionActorState.currentWinner)
             }
-            //this.auctionSpawner ! FreeAuction(this.id)
             freeAuction(this.id)
             Behaviors.same
-          }
-          case InternalEndAuctionResponse(_: UpdateTimeout[_], auctionId) => Behaviors.same
-          case InternalEndAuctionResponse(e: UpdateFailure[_], auctionId) => throw new IllegalStateException("Unexpected failure: " + e)
+
+          case InternalEndAuctionResponse(_: UpdateTimeout[_], _) => Behaviors.same
+          case InternalEndAuctionResponse(e: UpdateFailure[_], _) => throw new IllegalStateException("Unexpected failure: " + e)
           //End End Auction
 
 
 
           //Init Delete Auction
           case CancelAuction(replyTo) =>
-            var auctionId = this.id
-            println(s"Cancelando subasta ${auctionId}")
+            println(s"Cancelando subasta $id")
             replicator.askUpdate(
               askReplyTo => Update(DataKey, LWWMap.empty[String, AuctionActorState], writeMajority, askReplyTo) {
                 auctionStatePool => {
-                  auctionStatePool.get(auctionId) match {
-                    case Some(someAuctionActorState) => {
+                  auctionStatePool.get(id) match {
+                    case Some(someAuctionActorState) =>
                       this.auctionActorState = someAuctionActorState
-                      endAuction(auctionStatePool, auctionId)
-                    }
-                    case None => { auctionStatePool }
+                      endAuction(auctionStatePool, id)
+                    case None => auctionStatePool
                   }
                 }
               },
               InternalCancelAuctionResponse.apply(_, replyTo))
             Behaviors.same
-          case InternalCancelAuctionResponse(_: UpdateSuccess[_], replyTo) => {
+          case InternalCancelAuctionResponse(_: UpdateSuccess[_], replyTo) =>
             notifyCancelledAuction()
             replyTo ! s"Subasta ${this.id} cancelada"
-            //this.auctionSpawner ! FreeAuction(this.id)
             freeAuction(this.id)
             Behaviors.same
-          }
-          case InternalCancelAuctionResponse(_: UpdateTimeout[_], auctionId) => {
+
+          case InternalCancelAuctionResponse(_: UpdateTimeout[_], _) =>
             freeAuction(this.id)
             Behaviors.same
-          }
-          case InternalCancelAuctionResponse(e: UpdateFailure[_], auctionId) => throw new IllegalStateException("Unexpected failure: " + e)
+
+          case InternalCancelAuctionResponse(e: UpdateFailure[_], _) => throw new IllegalStateException("Unexpected failure: " + e)
           //End Delete Auction
         }
       }
 
   def makeBid(auctionStatePool:LWWMap[String, AuctionActorState], newBid:Bid, replyTo: ActorRef[String]) : LWWMap[String, AuctionActorState] = {
       auctionStatePool.get(newBid.auctionId) match {
-        case Some(auctionActorState) => {
+        case Some(auctionActorState) =>
           if(newBid.price > auctionActorState.price &&
             DateTime.now <= auctionActorState.endTime){
             val a = auctionStatePool.remove(node,newBid.auctionId)
@@ -256,14 +247,13 @@ private class AuctionActor(
             replyTo ! s"El precio enviado |${newBid.price}| puede ser menor que el establecido |${auctionActorState.price}|"
             auctionStatePool
           }
-        }
         case None => auctionStatePool
       }
   }
 
   def startAuction(auctionStatePool:LWWMap[String, AuctionActorState], auctionId:String, newAuction: Auction) : LWWMap[String, AuctionActorState] = {
     val a = auctionStatePool.remove(node,auctionId)
-    var endTime : DateTime = DateTime.now + (newAuction.duration * 1000)
+    val endTime : DateTime = DateTime.now + (newAuction.duration * 1000)
     a :+ (auctionId -> AuctionActorState(newAuction, newAuction.basePrice, null,Set[String](),endTime))
   }
 
@@ -271,19 +261,14 @@ private class AuctionActor(
     auctionStatePool.remove(node,auctionId)
   }
 
-/*    def updateWinner(buyerName : String):Unit = {
-      this.currentWinner = buyerName
-      this.buyers += buyerName
-    }*/
-
-  def notifyWinner() = {
+  def notifyWinner(): Unit = {
     getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
       case Some(actor) => actor ! NotifyWinner(this.auctionActorState.auction, this.auctionActorState.currentWinner)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }
   }
 
-  def notifyLosers(currentWinner : String) = {
+  def notifyLosers(currentWinner : String): Unit = {
     val losers = this.auctionActorState.buyers.filter(b => ! b.equals(currentWinner))
     getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
       case Some(actor) => actor ! NotifyLosers(this.auctionActorState.auction, losers)
@@ -291,27 +276,26 @@ private class AuctionActor(
     }
   }
 
-  def notifyCancelledAuction() = {
+  def notifyCancelledAuction(): Unit = {
     getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
       case Some(actor) => actor ! NotifyCancellation(auctionActorState.auction, auctionActorState.buyers)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }
   }
 
-  def notifyNewPrice(auction:Auction, buyers:Set[String], newPrice:Double) = {
+  def notifyNewPrice(auction:Auction, buyers:Set[String], newPrice:Double): Unit = {
     getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
       case Some(actor) => actor ! NotifyNewPrice(auction, buyers, newPrice)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }
   }
 
-  def freeAuction(auctionId:String) = {
-    getOneActor(context, AuctionSpawnerActor.AuctionSpawnerServiceKey) match {
-      case Some(actor) => {
+  def freeAuction(auctionId:String): Unit = {
+    getOneActor(context, AuctionSpawnerActor.serviceKey) match {
+      case Some(actor) =>
         actor ! FreeAuction(auctionId)
         this.id = null
         this.auctionActorState = null
-      }
       case None => context.log.debug("No se pudo obtener ref al AuctionSpawner :(")
     }
   }

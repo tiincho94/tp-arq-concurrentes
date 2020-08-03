@@ -1,7 +1,5 @@
 package iasc.g4.actors
 
-import java.io.File
-
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
@@ -15,7 +13,6 @@ import iasc.g4.App.Roles
 import iasc.g4.models.Models.{Auction, AuctionInstance, Auctions, Bid, Command, InternalCommand}
 
 import scala.concurrent.duration._
-import scala.sys.process.Process
 import iasc.g4.util.Util
 
 /**
@@ -24,11 +21,11 @@ import iasc.g4.util.Util
 object AuctionSpawnerActor {
 
   trait AuctionSpawnerCommand extends Command
-  val AuctionSpawnerServiceKey = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
+  val serviceKey: ServiceKey[AuctionSpawnerCommand] = ServiceKey[AuctionSpawnerCommand]("AuctionSpawner")
 
   /**
    * Genera una ServiceKey para identificar actores del tipo AuctionActor en base a un index
-   * @param index
+   * @param index índice del actor
    * @return
    */
   def generateAuctionServiceKey(index: Long): ServiceKey[Command] = {
@@ -66,15 +63,14 @@ object AuctionSpawnerActor {
         val poolSize = auctionSpawnerContext.system.settings.config.getInt("akka.cluster.auction-pool-size")
 
         auctionSpawnerContext.log.info("Configurando AuctionSpawner")
-        auctionSpawnerContext.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, auctionSpawnerContext.self)
+        auctionSpawnerContext.system.receptionist ! Receptionist.Register(serviceKey, auctionSpawnerContext.self)
 
         def freeAuction(auctionId: String,data: LWWMap[Long, AuctionInstance]): LWWMap[Long, AuctionInstance] = {
           data.entries.values.find(auctionInstance => auctionInstance.auctionId==auctionId) match {
-            case Some(someAuctionInstance) => {
-              var newAuctionInstance = new AuctionInstance(someAuctionInstance.index,"",true)
+            case Some(someAuctionInstance) =>
+              val newAuctionInstance = AuctionInstance(someAuctionInstance.index,"",isFree = true)
               val a = data.remove(node,newAuctionInstance.index)
               a :+ (newAuctionInstance.index -> newAuctionInstance)
-            }
             case _ => data
           }
         }
@@ -92,61 +88,50 @@ object AuctionSpawnerActor {
           val system = ActorSystem[Nothing](RootAuctionBehavior(index), "TP", config)
           system.log.info(s"${Roles.Auction.roleName} (Role) available at ${system.address}")
         }
-
-//        def startAuctionNode(index: Long) = {
-//          Process(s"sbt.bat 'runMain iasc.g4.App auction 0 $index'", new File("C:\\Users\\Dell\\Documents\\Facultad\\concurr\\tp-arq-concurrentes")).run()
-//        }
-
         def createAuction(data: LWWMap[Long, AuctionInstance], auctionId: String, newAuction:Auction ,replyTo: ActorRef[String], onCreateRef: ActorRef[Command]): LWWMap[Long, AuctionInstance] = {
           if (data.size < poolSize) {
             //Instancio un nodo, creo un actor y le asigno la nueva subasta
-            var index : Long = data.size+1
-            onCreateRef ! NewAuctionCreated(index, auctionId, newAuction, true, replyTo)
-            var auctionInstance = new AuctionInstance(index,auctionId,false)
-            data :+ (index -> auctionInstance)
+            val index : Long = data.size+1
+            onCreateRef ! NewAuctionCreated(index, auctionId, newAuction, createNode = true, replyTo)
+            data :+ (index -> AuctionInstance(index,auctionId,isFree = false))
           } else {
             //Busco una instancia libre y le asigno la subasta
             //Si no hay subastas libres, tiro
             data.entries.values.find(auctionInstance => auctionInstance.isFree) match {
-              case Some(someAuctionInstance) => {
-                onCreateRef ! NewAuctionCreated(someAuctionInstance.index, auctionId, newAuction, false, replyTo)
+              case Some(someAuctionInstance) =>
+                onCreateRef ! NewAuctionCreated(someAuctionInstance.index, auctionId, newAuction, createNode = false, replyTo)
                 val a = data.remove(node,someAuctionInstance.index)
-                a :+ (someAuctionInstance.index -> AuctionInstance(someAuctionInstance.index, auctionId, false))
-              }
-              case None => {
+                a :+ (someAuctionInstance.index -> AuctionInstance(someAuctionInstance.index, auctionId, isFree = false))
+              case None =>
                 replyTo ! "No hay instancias libres"
                 data
-              }
             }
           }
         }
 
         /**
          * Envia un mensaje a un AuctionActor. Intenta levantarlo si está caído
-         * @param auctionId
-         * @param index
-         * @param command
-         * @param replyTo
-         * @param errorMessage
+         * @param auctionId auctionID
+         * @param index índice del actor
+         * @param command mensaje a enviar al actor
+         * @param replyTo a quién responder en caso de error
+         * @param errorMessage mensaje de error
          */
-        def sendAuctionMessage(auctionId: String, index: Long, command: Command, replyTo: ActorRef[String], errorMessage: String) = {
+        def sendAuctionMessage(auctionId: String, index: Long, command: Command, replyTo: ActorRef[String], errorMessage: String): Unit = {
           Util.getOneActor(auctionSpawnerContext, generateAuctionServiceKey(index)) match {
             case Some(actor) => actor ! command
-            case None => {
+            case None =>
               println("No se encotró el auction actor... se intentará levantar una nueva instancia")
               startAuctionNode(index)
               Util.getOneActor(auctionSpawnerContext, generateAuctionServiceKey(index), 3) match {
-                case Some(newNode) => {
+                case Some(newNode) =>
                   newNode ! AuctionActor.ResumeAuction(auctionId)
                   newNode ! command
-                }
-                case None => {
+                case None =>
                   if (null != replyTo) {
                     replyTo ! errorMessage
                   }
-                }
               }
-            }
           }
         }
 
@@ -163,16 +148,14 @@ object AuctionSpawnerActor {
             Behaviors.same
           case InternalDeleteAuctionResponse(auctionId, replyTo, rsp) =>
             rsp match {
-              case g @ GetSuccess(DataKey) => {
+              case g @ GetSuccess(DataKey) =>
                 g.get(DataKey).entries.values.toSet.find(auctionInstance =>
                 auctionInstance.auctionId==auctionId) match {
-                  case Some(someAuctionInstance) => {
+                  case Some(someAuctionInstance) =>
                     sendAuctionMessage(someAuctionInstance.auctionId, someAuctionInstance.index,
                       AuctionActor.CancelAuction(replyTo), replyTo, s"Error intentando cancelar Auction $auctionId. No se pudo obtener ref al Auction Actor :(")
-                  }
                   case None => replyTo ! s"Error intentando cancelar Auction $auctionId. Auction no encontrado"
                 }
-              }
               case _ => replyTo ! s"Error intentando cancelar Auction $auctionId. Error de sistema"
             }
             Behaviors.same
@@ -190,7 +173,7 @@ object AuctionSpawnerActor {
           case InternalCreateAuctionResponse(_: UpdateTimeout[_]) => Behaviors.same
           case InternalCreateAuctionResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
 
-          case NewAuctionCreated(index, auctionId, newAuction, createNode, replyTo) => {
+          case NewAuctionCreated(index, auctionId, newAuction, createNode, replyTo) =>
             if (createNode) {
               startAuctionNode(index)
             }
@@ -199,7 +182,7 @@ object AuctionSpawnerActor {
               case None => replyTo ! "No se pudo obtener referencia al AuctionActor creado :("
             }
             Behaviors.same
-          }
+
           case MakeBid(auctionId, newBid, replyTo) =>
             println("Make Bid...")
             replicator.askGet(
@@ -209,21 +192,18 @@ object AuctionSpawnerActor {
             Behaviors.same
           case InternalMakeBidResponse(auctionId, newBid,replyTo, rsp) =>
             rsp match {
-              case g @ GetSuccess(DataKey) => {
+              case g @ GetSuccess(DataKey) =>
                 g.get(DataKey).entries.values.toSet.find(auctionInstance =>
                   auctionInstance.auctionId==auctionId) match {
-                  case Some(someAuctionInstance) => {
+                  case Some(someAuctionInstance) =>
                     sendAuctionMessage(someAuctionInstance.auctionId, someAuctionInstance.index,
                       AuctionActor.MakeBid(newBid, replyTo), replyTo, s"Error intentando realizar una oferta en subasta: $auctionId. No se pudo obtener ref al Auction Actor :(")
-                  }
                   case None => replyTo ! s"Error intentando realizar una oferta en subasta: $auctionId. Auction no encontrado"
                 }
-              }
               case _ => replyTo ! s"Error intentando realizar una oferta en subasta: $auctionId. Error de sistema"
             }
             Behaviors.same
           case FreeAuction(auctionId) =>
-            //auctionPoolEntity.freeAuction(id)
             println("AuctionSpawnerActor Free Auction...")
             replicator.askUpdate(
               askReplyTo => Update(DataKey, LWWMap.empty[Long, AuctionInstance], writeMajority, askReplyTo) {
@@ -246,10 +226,10 @@ object AuctionSpawnerActor {
               startAuctionNode(ai.index)
               if (!ai.isFree) {
                 Util.getOneActor(auctionSpawnerContext, generateAuctionServiceKey(ai.index), 3) match {
-                  case Some(actor) => actor ! AuctionActor.ResumeAuction(ai.auctionId)
-                  case None => {
+                  case Some(actor) =>
+                    actor ! AuctionActor.ResumeAuction(ai.auctionId)
+                  case None =>
                     auctionSpawnerContext.log.error(s"No fue posible obtener ref al auction actor ${ai.index}")
-                  }
                 }
               }
             })
