@@ -80,7 +80,6 @@ private class AuctionActor(
         msg match {
           //Init Check Auction Ended
           case Tick =>
-            println(s"Tick idx:$index - auction:$id")
             if (this.id != null) {
               replicator.askGet(
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
