@@ -44,12 +44,13 @@ object AuctionSpawnerActor {
   final case class NewAuctionCreated(index: Long, auctionId: String, newAuction: Auction, createNode: Boolean, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
 
   //Mensajes internos
-  final case class InternalDeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends AuctionSpawnerCommand
+  final case class InternalDeleteAuction(auctionId: String, replyTo: ActorRef[String]) extends InternalCommand
   private case class InternalDeleteAuctionResponse(auctionId:String, replyTo: ActorRef[String], rsp: GetResponse[LWWMap[Long, AuctionInstance]]) extends InternalCommand
   private case class InternalInitAuctionNodesResponse(rsp: GetResponse[LWWMap[Long, AuctionInstance]]) extends InternalCommand
   private case class InternalCreateAuctionResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
   private case class InternalMakeBidResponse(auctionId:String, newBid: Bid,replyTo: ActorRef[String], rsp: GetResponse[LWWMap[Long, AuctionInstance]]) extends InternalCommand
   private case class InternalFreeAuctionResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
+  private case class InitializeCluster() extends InternalCommand
 
   private val timeout = 3.seconds
   private val readMajority = ReadMajority(timeout)
@@ -67,15 +68,6 @@ object AuctionSpawnerActor {
         auctionSpawnerContext.log.info("Configurando AuctionSpawner")
         auctionSpawnerContext.system.receptionist ! Receptionist.Register(AuctionSpawnerServiceKey, auctionSpawnerContext.self)
 
-        initAuctionNodes()
-
-        def initAuctionNodes() = {
-          replicator.askGet(
-            askReplyTo => Get(DataKey, readMajority, askReplyTo),
-            rsp => InternalInitAuctionNodesResponse(rsp)
-          )
-        }
-
         def freeAuction(auctionId: String,data: LWWMap[Long, AuctionInstance]): LWWMap[Long, AuctionInstance] = {
           data.entries.values.find(auctionInstance => auctionInstance.auctionId==auctionId) match {
             case Some(someAuctionInstance) => {
@@ -86,6 +78,8 @@ object AuctionSpawnerActor {
             case _ => data
           }
         }
+
+        auctionSpawnerContext.scheduleOnce(1.seconds, auctionSpawnerContext.self, InitializeCluster())
 
         def startAuctionNode(index: Long): Unit = {
           val config = ConfigFactory
@@ -206,7 +200,6 @@ object AuctionSpawnerActor {
             }
             Behaviors.same
           }
-
           case MakeBid(auctionId, newBid, replyTo) =>
             println("Make Bid...")
             replicator.askGet(
@@ -241,6 +234,12 @@ object AuctionSpawnerActor {
           case InternalFreeAuctionResponse(_: UpdateSuccess[_]) => Behaviors.same
           case InternalFreeAuctionResponse(_: UpdateTimeout[_]) => Behaviors.same
           case InternalFreeAuctionResponse(e: UpdateFailure[_]) => throw new IllegalStateException("Unexpected failure: " + e)
+          case InitializeCluster() =>
+            replicator.askGet(
+              askReplyTo => Get(DataKey, readMajority, askReplyTo),
+              rsp => InternalInitAuctionNodesResponse(rsp)
+            )
+            Behaviors.same
           case InternalInitAuctionNodesResponse(g @ GetSuccess(DataKey)) =>
             val data = g.get(DataKey)
             data.entries.values.foreach( ai => {
@@ -266,6 +265,7 @@ object RootAuctionBehavior {
   def apply(index: Long): Behavior[Nothing] = Behaviors.setup[Nothing] { context =>
     Cluster(context.system)
     DistributedData(context.system).replicator
+    println(s"Iniciando auctionActor con index $index")
     context.spawn(AuctionActor(index, AuctionSpawnerActor.generateAuctionServiceKey(index)), s"Auction$index")
     Behaviors.empty
   }
