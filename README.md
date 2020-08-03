@@ -19,7 +19,7 @@ sbt "runMain iasc.g4.App notifier-spawner 0"
 sbt "runMain iasc.g4.App auction-spawner 0"
 ```
 ```bash
-sbt "runMain iasc.g4.App buyers-subscriptor 0"
+sbt "runMain iasc.g4.App buyers-suscriptor 0"
 ```
 
 Finalmente el server http:

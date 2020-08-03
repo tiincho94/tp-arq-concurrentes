@@ -34,6 +34,7 @@ object AuctionActor {
   final case class Init(index:Long , auctionSpawner : ActorRef[AuctionSpawnerActor.AuctionSpawnerCommand]) extends Command
   final case class EndAuction(auctionId : String) extends Command
   final case class CancelAuction(replyTo:ActorRef[String]) extends Command
+  final case class ResumeAuction(auctionId: String) extends Command
 
   //Mensajes Internos
   private case class InternalStartAuctionResponse[A <: ReplicatedData](rsp: UpdateResponse[A],newAuction:Auction,replyTo: ActorRef[String]) extends InternalCommand
@@ -42,16 +43,17 @@ object AuctionActor {
   private case class InternalMakeBidResponse[A <: ReplicatedData](rsp: UpdateResponse[A],newBid:Bid,replyTo: ActorRef[String]) extends InternalCommand
   private case class InternalCheckAuctionEnded(auctionId:String, rsp: GetResponse[LWWMap[String, AuctionActorState]]) extends InternalCommand
   private case class InternalNotifyNewPrice(newBid:Bid, replyTo: ActorRef[String], rsp: GetResponse[LWWMap[String, AuctionActorState]]) extends InternalCommand
-
   private case object Tick extends Command
 
   def apply(index: Long,auctionActorServiceKey : ServiceKey[Command]): Behavior[Command] =
     Behaviors.setup(ctx => {
-      new AuctionActor(ctx, index, auctionActorServiceKey)
+      Behaviors.withTimers[Command] { timers =>
+        timers.cancelAll()
+        timers.startTimerWithFixedDelay(Tick, Tick, 1.second)
+        new AuctionActor(ctx, index, auctionActorServiceKey)
+      }
     }
   )
-  /*def apply(): Behavior[Command] =
-    Behaviors.setup(ctx => new AuctionActor(ctx))*/
 }
 
 private class AuctionActor(
@@ -74,27 +76,24 @@ private class AuctionActor(
   println(s"AuctionActor Registrado con índice $index")
 
   override def onMessage(msg: Command): Behavior[Command] =
-    Behaviors.withTimers[Command] { timers =>
       DistributedData.withReplicatorMessageAdapter[Command, LWWMap[String, AuctionActorState]] { replicator =>
-        timers.startTimerWithFixedDelay(Tick, Tick, 1.second)
         msg match {
-
-
-
           //Init Check Auction Ended
           case Tick =>
+            println(s"Tick idx:$index - auction:$id")
             if (this.id != null) {
               replicator.askGet(
                 askReplyTo => Get(DataKey, readMajority, askReplyTo),
                 rsp => InternalCheckAuctionEnded(this.id, rsp)
               )
             }
-          Behaviors.same
+            Behaviors.same
           case InternalCheckAuctionEnded(auctionId, g @ GetSuccess(DataKey)) =>
             val data = g.get(DataKey)
             data.get(auctionId) match {
               case Some(auctionActorState) => {
                 if (DateTime.now >= auctionActorState.endTime){
+                  println(s"Ending idx $index auction $id")
                   context.self ! EndAuction(auctionId)
                 }
               } case None => {}
@@ -104,6 +103,14 @@ private class AuctionActor(
           case InternalCheckAuctionEnded(auctionId, GetFailure(DataKey, _)) => Behaviors.same
           //End Check Auction Ended
 
+
+
+          // Init Resume Auction
+          case ResumeAuction(auctionId) =>
+            println(s"Resuming Auction $auctionId")
+            this.id = auctionId
+            Behaviors.same
+          //
 
 
 
@@ -236,7 +243,6 @@ private class AuctionActor(
           //End Delete Auction
         }
       }
-    }
 
   def makeBid(auctionStatePool:LWWMap[String, AuctionActorState], newBid:Bid, replyTo: ActorRef[String]) : LWWMap[String, AuctionActorState] = {
       auctionStatePool.get(newBid.auctionId) match {

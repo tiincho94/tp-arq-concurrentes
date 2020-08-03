@@ -23,7 +23,7 @@ object Models {
   final case class Auction(id:String, basePrice: Double, duration: Long, tags: Set[String], article: String)
   final case class Auctions(auctions: Set[Auction])
   final case class Bid(auctionId:String, buyerName : String, price : Double)
-  final case class AuctionInstance(index :Long, id:String,  isFree:Boolean)
+  final case class AuctionInstance(index :Long, auctionId:String, isFree:Boolean)
   final case class AuctionActorState(auction : Auction , price : Double, currentWinner: String ,buyers : Set[String], endTime : DateTime)
 
   import DefaultJsonProtocol._
