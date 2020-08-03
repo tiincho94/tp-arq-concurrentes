@@ -35,3 +35,17 @@ archivo App); o bien desde consola:
 ```bash
 sbt "runMain iasc.g4.App"
 ```
+
+### Comandos útiles para pruebas
+
+#### Windows (CMD)
+
+Para determinar qué proceso está escuchando en un puerto y obtener su PID
+```bash
+netstat -ano | findstr /r "LISTENING.*<Puerto>"
+```
+
+Para finalizar un proceso a partir de su PID
+```bash
+taskkill /F /PID <Puerto>
+```
