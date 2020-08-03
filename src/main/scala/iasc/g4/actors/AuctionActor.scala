@@ -123,7 +123,7 @@ private class AuctionActor(
 
           case InternalStartAuctionResponse(_: UpdateSuccess[_], newAuction, replyTo) =>
             replyTo ! s"Auction index: $index"
-            getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+            getOneActor(context, NotifierSpawnerActor.serviceKey) match {
               case Some(actor) => actor ! NotifyNewAuction(newAuction)
               case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
             }
@@ -262,7 +262,7 @@ private class AuctionActor(
   }
 
   def notifyWinner(): Unit = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+    getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyWinner(this.auctionActorState.auction, this.auctionActorState.currentWinner)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }
@@ -270,21 +270,21 @@ private class AuctionActor(
 
   def notifyLosers(currentWinner : String): Unit = {
     val losers = this.auctionActorState.buyers.filter(b => ! b.equals(currentWinner))
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+    getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyLosers(this.auctionActorState.auction, losers)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }
   }
 
   def notifyCancelledAuction(): Unit = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+    getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyCancellation(auctionActorState.auction, auctionActorState.buyers)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }
   }
 
   def notifyNewPrice(auction:Auction, buyers:Set[String], newPrice:Double): Unit = {
-    getOneActor(context, NotifierSpawnerActor.NotifierSpawnerServiceKey) match {
+    getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyNewPrice(auction, buyers, newPrice)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
     }

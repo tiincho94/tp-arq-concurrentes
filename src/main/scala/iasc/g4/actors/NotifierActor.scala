@@ -1,7 +1,7 @@
 package iasc.g4.actors
-import iasc.g4.models.Models.{Command}
+import iasc.g4.models.Models.Command
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{Behavior}
+import akka.actor.typed.Behavior
 import iasc.g4.models.Models.Buyer
 import iasc.g4.models.Models.Auction
 import iasc.g4.util.Util.makeHttpCall
@@ -22,7 +22,7 @@ object NotifierActor {
       Behaviors.receiveMessage {
         case NewAuction(buyer, auction) =>
           ctx.log.info(s"Avisando de nueva auction a buyer ${buyer.name}, ip: ${buyer.ip}")
-          makeHttpCall(s"http://${buyer.ip}/nuevaSubasta?id=${auction.id}");
+          makeHttpCall(s"http://${buyer.ip}/nuevaSubasta?id=${auction.id}")
           Behaviors.same
         case Winner(buyer, auction) =>
           ctx.log.info(s"Avisando a ganador ${buyer.name} de auction ${auction.id}, ip: ${buyer.ip}")

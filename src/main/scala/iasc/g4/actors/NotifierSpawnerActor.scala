@@ -7,9 +7,9 @@ import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.Behavior
 import iasc.g4.util.Util.{getOneActor, getTimeout}
 import akka.actor.typed.scaladsl.AskPattern._
-import iasc.g4.actors.BuyersSubscriptorActor.{GetBuyer, GetBuyers}
+import iasc.g4.actors.BuyersSubscriptorActor._
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 
 /**
  * Encargado de asignar a actores Notifier la tarea de enviar una notificación, previamente obeniendo la lista de
@@ -27,12 +27,12 @@ object NotifierSpawnerActor {
   final case class NotifyLosers(auction: Auction, loosers: Set[String]) extends NotifierSpawnerCommand
   final case class NotifyCancellation(auction: Auction, buyers: Set[String]) extends NotifierSpawnerCommand
 
-  val NotifierSpawnerServiceKey = ServiceKey[NotifierSpawnerCommand]("NotifierSpawner")
+  val serviceKey: ServiceKey[NotifierSpawnerCommand] = ServiceKey[NotifierSpawnerCommand]("NotifierSpawner")
 
   def apply(): Behavior[Command] =
     Behaviors.setup { ctx =>
       ctx.log.info("Configurando NotifierSpawnerActor")
-      ctx.system.receptionist ! Receptionist.Register(NotifierSpawnerServiceKey, ctx.self)
+      ctx.system.receptionist ! Receptionist.Register(serviceKey, ctx.self)
 
       val pool = Routers.pool(poolSize = 5)(
         Behaviors.supervise(NotifierActor()).onFailure[Exception](SupervisorStrategy.restart)
@@ -73,29 +73,25 @@ object NotifierSpawnerActor {
     }
 
   def getBuyers(ctx: ActorContext[_], auction: Auction): Buyers = {
-    getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey) match {
-      case Some(actor) => {
+    getOneActor(ctx, BuyersSubscriptorActor.serviceKey) match {
+      case Some(actor) =>
         val f = actor.ask(GetBuyers(auction.tags, _))(getTimeout(ctx), ctx.system.scheduler)
         Await.result(f, getTimeout(ctx).duration)
-      }
-      case None => {
+      case None =>
         ctx.log.debug("No se pudo obtener ref al BuyerSuscriptor :(")
         Buyers(Set[Buyer]())
-      }
     }
 
   }
 
   def getBuyer(ctx: ActorContext[_], name: String): Option[Buyer] = {
-    getOneActor(ctx, BuyersSubscriptorActor.BuyersSubscriptorServiceKey) match {
-      case Some(actor) => {
+    getOneActor(ctx, BuyersSubscriptorActor.serviceKey) match {
+      case Some(actor) =>
         val f = actor.ask(GetBuyer(name, _))(getTimeout(ctx), ctx.system.scheduler)
         Await.result(f, getTimeout(ctx).duration)
-      }
-      case None => {
+      case None =>
         ctx.log.debug("No se pudo obtener ref al BuyerSuscriptor :(")
         null
-      }
     }
 
   }

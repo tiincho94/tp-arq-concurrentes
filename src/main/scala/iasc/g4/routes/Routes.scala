@@ -31,7 +31,7 @@ class Routes(context: ActorContext[_]) {
   object BuyersRoutes {
 
     def getBuyers(tags: Set[String]): Future[Buyers] = {
-      getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
+      getActors(context, BuyersSubscriptorActor.serviceKey).flatMap(actors =>
         if (!actors.isEmpty) {
           actors.head.ask(GetBuyers(tags, _))(timeout, context.system.scheduler)
         } else {
@@ -41,7 +41,7 @@ class Routes(context: ActorContext[_]) {
     }
 
     def createBuyer(newBuyer: Buyer): Future[String] = {
-      getActors(context, BuyersSubscriptorActor.BuyersSubscriptorServiceKey).flatMap(actors =>
+      getActors(context, BuyersSubscriptorActor.serviceKey).flatMap(actors =>
         actors.head.ask(CreateBuyer(newBuyer,_))(timeout, context.system.scheduler)
       )
     }

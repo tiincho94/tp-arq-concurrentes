@@ -1,14 +1,11 @@
 package iasc.g4.actors
 
-//import akka.actor.typed.delivery.internal.ProducerControllerImpl.InternalCommand
-
 import scala.concurrent.duration._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import iasc.g4.CborSerializable
-import iasc.g4.models.Models.{Buyer, Buyers, Command, InternalCommand, OperationPerformed}
-import akka.cluster.ddata.{Flag, LWWMap, LWWMapKey, ReplicatedData, SelfUniqueAddress}
+import iasc.g4.models.Models.{Buyer, Buyers, Command, InternalCommand}
+import akka.cluster.ddata.{LWWMap, LWWMapKey, ReplicatedData, SelfUniqueAddress}
 import akka.cluster.ddata.Replicator._
 import akka.cluster.ddata.typed.scaladsl.DistributedData
 import akka.cluster.ddata.typed.scaladsl.Replicator.{Get, Update}
@@ -21,22 +18,15 @@ object BuyersSubscriptorActor {
 
   trait BuyersSubscriptorCommand extends Command
 
-  val BuyersSubscriptorServiceKey = ServiceKey[BuyersSubscriptorCommand]("BuyerSubscriptor")
-
-  //var buyersSet = Set[Buyer]()
-
+  val serviceKey: ServiceKey[BuyersSubscriptorCommand] = ServiceKey[BuyersSubscriptorCommand]("BuyerSubscriptor")
 
   final case class GetBuyer(name: String, replyTo: ActorRef[Option[Buyer]]) extends BuyersSubscriptorCommand
-
   final case class GetBuyers(tags: Set[String] = Set(), replyTo: ActorRef[Buyers]) extends BuyersSubscriptorCommand
-
   final case class CreateBuyer(buyer: Buyer, replyTo: ActorRef[String]) extends BuyersSubscriptorCommand
 
   private case class InternalUpdateResponse[A <: ReplicatedData](rsp: UpdateResponse[A]) extends InternalCommand
   private case class InternalBuyersGetResponse(tags: Set[String], replyTo: ActorRef[Buyers], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
-
   private case class InternalBuyerGetResponse(name:String, replyTo: ActorRef[Option[Buyer]], rsp: GetResponse[LWWMap[String, Buyer]]) extends InternalCommand
-
 
   private val timeout = 3.seconds
   private val readMajority = ReadMajority(timeout)
@@ -45,32 +35,28 @@ object BuyersSubscriptorActor {
   // instanciación del objeto
   def apply(): Behavior[Command] =
     Behaviors.setup { ctx =>
-      DistributedData.withReplicatorMessageAdapter[Command, Flag] { replicatorFlag =>
         DistributedData.withReplicatorMessageAdapter[Command, LWWMap[String, Buyer]] { replicator =>
 
           implicit val node: SelfUniqueAddress = DistributedData(ctx.system).selfUniqueAddress
-
           val DataKey = LWWMapKey[String, Buyer]("buyer")
 
           ctx.log.info("Configurando BuyerSubscriptor")
-          ctx.system.receptionist ! Receptionist.Register(BuyersSubscriptorServiceKey, ctx.self)
+          ctx.system.receptionist ! Receptionist.Register(serviceKey, ctx.self)
 
           def updateBuyers(data: LWWMap[String, Buyer], buyer: Buyer, replyTo: ActorRef[String]): LWWMap[String, Buyer] = {
             data.get(buyer.name) match {
-              case Some(_) => {
+              case Some(_) =>
                 replyTo ! "Nombre no disponible"
                 data
-              }
-              case None => {
+              case None =>
                 replyTo ! "Buyer creado"
                 data :+ (buyer.name -> buyer)
-              }
             }
           }
 
           /**
-           * @param buyers
-           * @param tags
+           * @param buyers set de buyers a filtrar
+           * @param tags tags de filtrado
            * @return buyers que tengan cualquiera de los tags provistos
            */
           def filterBuyers(buyers: Set[Buyer], tags: Set[String]): Buyers = {
@@ -97,7 +83,7 @@ object BuyersSubscriptorActor {
               replyTo ! buyers.find(buyer => buyer.name == name)
               Behaviors.same
 
-            case InternalBuyerGetResponse(name, replyTo, NotFound(DataKey, _)) =>
+            case InternalBuyerGetResponse(_, replyTo, NotFound(DataKey, _)) =>
               replyTo ! None
               Behaviors.same
 
@@ -124,7 +110,7 @@ object BuyersSubscriptorActor {
               replyTo ! filterBuyers(data.entries.values.toSet, tags)
               Behaviors.same
 
-            case InternalBuyersGetResponse(tags, replyTo, NotFound(DataKey, _)) =>
+            case InternalBuyersGetResponse(_, replyTo, NotFound(DataKey, _)) =>
               replyTo ! Buyers(Set.empty)
               Behaviors.same
 
@@ -150,6 +136,5 @@ object BuyersSubscriptorActor {
               Behaviors.same
           }
         }
-      }
     }
 }
