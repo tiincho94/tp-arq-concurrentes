@@ -39,7 +39,7 @@ public class AuctionClientController {
 	}
 
 	@GetMapping("/nuevoPrecio")
-	public ResponseEntity<String> subastaPerdida(@PathParam("id") String id, @PathParam("precio") Double precio) {
+	public ResponseEntity<String> nuevoPrecio(@PathParam("id") String id, @PathParam("precio") Double precio) {
 		LOG.info("{}: Nuevo precio recibido para subasta {}: {}", service.getName(), id, precio);
 		service.updatePrice(id, precio);
 		return ResponseEntity.ok().body("Ok!");

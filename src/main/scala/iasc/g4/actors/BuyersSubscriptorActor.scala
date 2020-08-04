@@ -111,6 +111,7 @@ object BuyersSubscriptorActor {
               Behaviors.same
 
             case InternalBuyersGetResponse(_, replyTo, NotFound(DataKey, _)) =>
+              println("Estructura de buyers no encontrada...")
               replyTo ! Buyers(Set.empty)
               Behaviors.same
 

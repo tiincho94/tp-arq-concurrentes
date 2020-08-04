@@ -122,14 +122,20 @@ private class AuctionActor(
             Behaviors.same
 
           case InternalStartAuctionResponse(_: UpdateSuccess[_], newAuction, replyTo) =>
-            replyTo ! s"Auction index: $index"
-            getOneActor(context, NotifierSpawnerActor.serviceKey) match {
-              case Some(actor) => actor ! NotifyNewAuction(newAuction)
-              case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
+            getOneActor(context, NotifierSpawnerActor.serviceKey, 3) match {
+              case Some(actor) =>
+                println(s"Notificando new auction ${newAuction.id}")
+                actor ! NotifyNewAuction(newAuction)
+                replyTo ! s"Auction index: $index"
+              case None =>
+                context.log.error("No se pudo obtener ref al NotifierSpawner :(")
+                replyTo ! s"Error notificando para auction $index"
             }
             Behaviors.same
 
-          case InternalStartAuctionResponse(_: UpdateTimeout[_], _, _) => Behaviors.same
+          case InternalStartAuctionResponse(_: UpdateTimeout[_], newAuction, _) =>
+            context.log.error(s"Timeout actualizando estructura en StartAuction ${newAuction.id}")
+            Behaviors.same
           case InternalStartAuctionResponse(e: UpdateFailure[_], _, _) => throw new IllegalStateException("Unexpected failure: " + e)
           //End Start Auction
 
@@ -188,11 +194,9 @@ private class AuctionActor(
               InternalEndAuctionResponse.apply(_, auctionId))
             Behaviors.same
           case InternalEndAuctionResponse(_: UpdateSuccess[_], _) =>
-            this.auctionActorState.currentWinner match {
-              case null =>
-              case _ =>
-                notifyWinner()
-                notifyLosers(this.auctionActorState.currentWinner)
+            if (null != auctionActorState.currentWinner) {
+              notifyLosers(this.auctionActorState.currentWinner)
+              notifyWinner()
             }
             freeAuction(this.id)
             Behaviors.same
@@ -237,14 +241,21 @@ private class AuctionActor(
   def makeBid(auctionStatePool:LWWMap[String, AuctionActorState], newBid:Bid, replyTo: ActorRef[String]) : LWWMap[String, AuctionActorState] = {
       auctionStatePool.get(newBid.auctionId) match {
         case Some(auctionActorState) =>
-          if(newBid.price > auctionActorState.price &&
-            DateTime.now <= auctionActorState.endTime){
-            val a = auctionStatePool.remove(node,newBid.auctionId)
+          if (DateTime.now < auctionActorState.endTime) {
             var buyers = auctionActorState.buyers
             buyers += newBid.buyerName
-            a :+ (auctionActorState.auction.id -> AuctionActorState(auctionActorState.auction, newBid.price, newBid.buyerName,buyers,auctionActorState.endTime))
+            println(s"A punto de actualizar estado con lista de buyers: $buyers")
+
+            if(newBid.price > auctionActorState.price){
+              val a = auctionStatePool.remove(node,newBid.auctionId)
+              a :+ (auctionActorState.auction.id -> AuctionActorState(auctionActorState.auction, newBid.price, newBid.buyerName,buyers,auctionActorState.endTime))
+            } else {
+              replyTo ! s"El precio enviado |${newBid.price}| puede ser menor que el establecido |${auctionActorState.price}|"
+              val a = auctionStatePool.remove(node,newBid.auctionId)
+              a :+ (auctionActorState.auction.id -> AuctionActorState(auctionActorState.auction, auctionActorState.price, auctionActorState.currentWinner,buyers,auctionActorState.endTime))
+            }
           } else {
-            replyTo ! s"El precio enviado |${newBid.price}| puede ser menor que el establecido |${auctionActorState.price}|"
+            replyTo ! s"Subasta ya terminada ${newBid.auctionId}"
             auctionStatePool
           }
         case None => auctionStatePool
@@ -262,6 +273,7 @@ private class AuctionActor(
   }
 
   def notifyWinner(): Unit = {
+    println(s"Auction a punto de notificar a ganador")
     getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyWinner(this.auctionActorState.auction, this.auctionActorState.currentWinner)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
@@ -269,7 +281,10 @@ private class AuctionActor(
   }
 
   def notifyLosers(currentWinner : String): Unit = {
+    println(s"Ganador actual: ${this.auctionActorState.currentWinner}")
+    println(s"Buyers a filtrar: ${this.auctionActorState.buyers}")
     val losers = this.auctionActorState.buyers.filter(b => ! b.equals(currentWinner))
+    println(s"Auction a punto de notificar perdedores: $losers")
     getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyLosers(this.auctionActorState.auction, losers)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")
@@ -284,6 +299,7 @@ private class AuctionActor(
   }
 
   def notifyNewPrice(auction:Auction, buyers:Set[String], newPrice:Double): Unit = {
+    println(s"Avisando nuevo precio a $buyers")
     getOneActor(context, NotifierSpawnerActor.serviceKey) match {
       case Some(actor) => actor ! NotifyNewPrice(auction, buyers, newPrice)
       case None => context.log.debug("No se pudo obtener ref al NotifierSpawner :(")

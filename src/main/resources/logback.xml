@@ -33,7 +33,7 @@
         <appender-ref ref="ASYNC"/>
     </logger>
 
-    <logger name="akka.remote.artery.tcp.ArteryTcpTransport" level="ERROR">
+    <logger name="akka.remote.artery.tcp.ArteryTcpTransport" level="DEBUG">
         <appender-ref ref="ASYNC"/>
     </logger>
 

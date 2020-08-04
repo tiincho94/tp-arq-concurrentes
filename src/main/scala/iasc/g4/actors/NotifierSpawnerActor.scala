@@ -41,6 +41,7 @@ object NotifierSpawnerActor {
 
       Behaviors.receiveMessage {
         case NotifyNewAuction(auction) =>
+          ctx.log.info(s"Procesando NotifyNewAuction para ${auction.id}")
           getBuyers(ctx, auction).buyers.foreach { buyer =>
             router ! NotifierActor.NewAuction(buyer, auction)
           }
@@ -58,6 +59,7 @@ object NotifierSpawnerActor {
           }
           Behaviors.same
         case NotifyLosers(auction, loosers) =>
+          ctx.log.info(s"Notificando a loosers $loosers")
           val set: Set[Buyer] = getBuyers(ctx,auction).buyers
           loosers.foreach(looser => {
             router ! NotifierActor.Looser(getBuyerFromSet(looser, set), auction)
@@ -76,7 +78,9 @@ object NotifierSpawnerActor {
     getOneActor(ctx, BuyersSubscriptorActor.serviceKey) match {
       case Some(actor) =>
         val f = actor.ask(GetBuyers(auction.tags, _))(getTimeout(ctx), ctx.system.scheduler)
-        Await.result(f, getTimeout(ctx).duration)
+        val buyers = Await.result(f, getTimeout(ctx).duration)
+        ctx.log.debug(s"Buyers obtenidos: $buyers")
+        buyers
       case None =>
         ctx.log.debug("No se pudo obtener ref al BuyerSuscriptor :(")
         Buyers(Set[Buyer]())

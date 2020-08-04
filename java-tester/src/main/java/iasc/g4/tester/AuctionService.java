@@ -2,6 +2,7 @@ package iasc.g4.tester;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Random;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.web.servlet.context.ServletWebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.http.HttpEntity;
@@ -52,7 +54,9 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	 * @throws UnknownHostException
 	 */
 	public AuctionService() throws UnknownHostException  {
-		client = new RestTemplate();
+		client = new RestTemplateBuilder()
+				.setReadTimeout(Duration.ofSeconds(2))
+				.build();
 		auctions = new HashMap<>();
 	}
 
@@ -99,7 +103,7 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	/**
 	 * place bid for all auctions
 	 */
-	@Scheduled(fixedRateString ="${client.bid.delay:5000}", initialDelay=5000)
+	@Scheduled(fixedRateString ="${client.bid.delay:2000}", initialDelayString = "${client.bid.initial-delay:1000}")
 	public void bidAll() {
 		auctions.forEach((auctionId, lastPrice) -> bid(auctionId, lastPrice + RND.nextDouble() * getMaxBidIncrase()));
 	}
@@ -110,11 +114,16 @@ public class AuctionService implements ApplicationListener<ServletWebServerIniti
 	 * @param amount
 	 */
 	private void bid(String auctionId, double amount) {
-		LOG.info("{}: Enviando bid a {} de {}", name, auctionId, amount);
-		HttpEntity<Bid> req = new HttpEntity<>(new Bid(auctionId, name, amount));
-		ResponseEntity<String> r = client.exchange(serverHost + "/bids", HttpMethod.PUT, req, String.class);
-		LOG.info("{}: Resultado de bid a {}: {}", name, auctionId, r.getBody());
-		updateAuctionPrice(auctionId, amount);
+		try {
+			LOG.info("{}: Enviando bid a {} de {}", name, auctionId, amount);
+			HttpEntity<Bid> req = new HttpEntity<>(new Bid(auctionId, name, amount));
+			ResponseEntity<String> r = client.exchange(serverHost + "/bids", HttpMethod.PUT, req, String.class);
+			LOG.info("{}: Resultado de bid a {}: {}", name, auctionId, r.getBody());
+			updateAuctionPrice(auctionId, amount);
+		} catch (Exception e) {
+			LOG.error("{}: Error haciendo bid: {}", name, e.getMessage());
+		}
+		
 	}
 
 	/**

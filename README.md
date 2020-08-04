@@ -1,6 +1,37 @@
 # TP Arquitecturas concurrentes
 
-### Cómo ejecutar el cluster: 
+### Construir ejecutable
+
+Iniciar consola de sbt en el directorio del proyecto
+```bash
+sbt
+```
+Compilar el mismo
+```bash
+compile
+```
+
+Finalmente ejecutar el dist
+```bash
+dist
+```
+El dist generará un zip en el directorio 'tp-arq-concurrentes\target\universal\'
+
+
+### Cómo ejecutar el cluster desde el ejecutable ya construido:
+Ubicarse en la carpeta '/ejecutable/bin' y ejecutar alguno de los siguientes comandos, previamente descomprimiendo el zip:
+
+Primero levantar el ejecutable con un único parámetro (Esto ejecuta todos los actores menos el auction-spawner en un único proceso)
+```bash
+tp-arq-concurrentes main
+```
+
+Finalmente levantar una instancia del auction-spawner:
+```bash
+tp-arq-concurrentes auction-spawner 0
+```
+
+### Cómo ejecutar el cluster usando SBT: 
 #### Opción 1: Cada instancia en una terminal independiente:
 
 Levantar seeds:

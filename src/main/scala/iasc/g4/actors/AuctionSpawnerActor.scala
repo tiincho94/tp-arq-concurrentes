@@ -59,10 +59,6 @@ object AuctionSpawnerActor {
   def apply(): Behavior[Command] = Behaviors.setup { auctionSpawnerContext =>
       DistributedData.withReplicatorMessageAdapter[Command, LWWMap[Long, AuctionInstance]] { replicator =>
 
-        //printf("\n\n\n")
-        //val output = Process("echo %CD%").run()
-        //printf("\n\n\n")
-
         implicit val node: SelfUniqueAddress = DistributedData(auctionSpawnerContext.system).selfUniqueAddress
         val DataKey = LWWMapKey[Long, AuctionInstance]("auctionPool")
 
