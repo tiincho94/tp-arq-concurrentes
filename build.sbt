@@ -1,8 +1,12 @@
-name := "tp-arq-concurrentes"
+lazy val root = (project in file(".")).
+  settings(
+    name := "tp-arq-concurrentes",
+    version := "1.0",
+    scalaVersion := "2.13.1",
+    mainClass in Compile := Some("iasc.g4.App")
+  )
 
-version := "1.0"
-
-scalaVersion := "2.13.1"
+enablePlugins(JavaAppPackaging)
 
 lazy val akkaVersion = "2.6.6"
 lazy val akkaHttpVersion = "10.1.12"
@@ -18,4 +22,3 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
 )
-

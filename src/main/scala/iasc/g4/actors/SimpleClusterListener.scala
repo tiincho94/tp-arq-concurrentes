@@ -41,7 +41,8 @@ object SimpleClusterListener {
                   "Member is TINWOW Removed: {} after {}",
                   member.address, previousStatus)
                   if(member.hasRole(Roles.AuctionSpawner.roleName)) {
-                      println("AUCTION SPAWNER REMOVIDO")
+                      println("AUCTION SPAWNER REMOVIDO...")
+                    Process("tp-arq-concurrentes.bat auction-spawner 0").run()
                   }
                 Behaviors.same
               case _ =>
